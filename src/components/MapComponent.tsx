@@ -37,8 +37,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         if (!mapContainer.current) return;
 
-        // For demo purposes, we'll use a temporary token
-        // In production, this should come from environment variables or user input
+        // Set access token
         mapboxgl.default.accessToken = mapboxToken;
         
         const defaultCenter = { lng: 77.5946, lat: 12.9716 }; // Bangalore, India
@@ -69,8 +68,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
     loadMap();
 
     return () => {
-      if (map.current && map.current.remove) {
-        map.current.remove();
+      if (map.current) {
+        try {
+          map.current.remove();
+        } catch (e) {
+          console.error('Error removing map:', e);
+        }
         map.current = null;
       }
     };
@@ -87,11 +90,20 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         // Clear existing markers and layers
         const mapElement = map.current;
-        document.querySelectorAll('.mapboxgl-marker').forEach(marker => marker.remove());
         
+        // Remove existing markers
+        document.querySelectorAll('.mapboxgl-marker').forEach(marker => {
+          marker.remove();
+        });
+        
+        // Safely remove existing layers and sources
         try {
-          if (mapElement.getLayer('route')) mapElement.removeLayer('route');
-          if (mapElement.getSource('route')) mapElement.removeSource('route');
+          if (mapElement.getLayer('route')) {
+            mapElement.removeLayer('route');
+          }
+          if (mapElement.getSource('route')) {
+            mapElement.removeSource('route');
+          }
         } catch (e) {
           console.log('Layer or source did not exist', e);
         }
@@ -121,22 +133,21 @@ const MapComponent: React.FC<MapComponentProps> = ({
             el.style.boxShadow = '0 0 0 2px #F97316';
             
             // Add the marker
+            const popup = new mapboxgl.default.Popup({ offset: 25 })
+              .setHTML(
+                `<h3 class="font-bold">${signal.name}</h3>
+                <p>${signal.location}</p>
+                <p>Wait time: ${signal.duration}s</p>
+                <p>Vendors: ${signal.vendorCount}</p>`
+              );
+              
             new mapboxgl.default.Marker(el)
               .setLngLat([signal.coordinates.lng, signal.coordinates.lat])
-              .setPopup(
-                new mapboxgl.default.Popup({ offset: 25 })
-                  .setHTML(
-                    `<h3 class="font-bold">${signal.name}</h3>
-                    <p>${signal.location}</p>
-                    <p>Wait time: ${signal.duration}s</p>
-                    <p>Vendors: ${signal.vendorCount}</p>`
-                  )
-              )
+              .setPopup(popup)
               .addTo(mapElement);
           });
           
-          // For a real implementation, we would make an API call here to get the route
-          // For the demo, we'll just draw a straight line
+          // Add route source and layer
           mapElement.addSource('route', {
             type: 'geojson',
             data: {
@@ -177,6 +188,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
             bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
           });
           
+          // Fit map to bounds with padding
           mapElement.fitBounds(bounds, {
             padding: 50,
             maxZoom: 15
