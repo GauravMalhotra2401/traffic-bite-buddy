@@ -50,7 +50,7 @@ const Hero: React.FC = () => {
         
         <div className="w-full lg:w-1/2 mt-12 lg:mt-0">
           <div className="relative w-full max-w-lg mx-auto">
-            {/* Replace the old card with the 3D animation */}
+            {/* 3D Car Animation */}
             <ThreeDCarAnimation />
           </div>
         </div>

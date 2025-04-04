@@ -1,23 +1,18 @@
 
 import React, { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Environment, PerspectiveCamera } from '@react-three/drei';
-import { Group, MathUtils } from 'three';
+import { OrbitControls, Environment, PerspectiveCamera } from '@react-three/drei';
+import { Group } from 'three';
 
 function Car(props: any) {
   const group = useRef<Group>(null);
-  // Using a simple car model placeholder since we don't have actual GLTF models
   
   useFrame(({ clock }) => {
     if (group.current) {
       // Create a bouncing animation
       group.current.position.y = Math.sin(clock.getElapsedTime() * 2) * 0.05;
       // Gentle rotation
-      group.current.rotation.y = MathUtils.lerp(
-        group.current.rotation.y,
-        Math.sin(clock.getElapsedTime() * 0.3) * 0.1,
-        0.1
-      );
+      group.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.3) * 0.1;
     }
   });
 
@@ -35,19 +30,19 @@ function Car(props: any) {
       </mesh>
       {/* Wheels */}
       <mesh position={[-1, 0, -1.5]}>
-        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} rotation={[Math.PI / 2, 0, 0]} />
+        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} />
         <meshStandardMaterial color="#111" />
       </mesh>
       <mesh position={[1, 0, -1.5]}>
-        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} rotation={[Math.PI / 2, 0, 0]} />
+        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} />
         <meshStandardMaterial color="#111" />
       </mesh>
       <mesh position={[-1, 0, 1.5]}>
-        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} rotation={[Math.PI / 2, 0, 0]} />
+        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} />
         <meshStandardMaterial color="#111" />
       </mesh>
       <mesh position={[1, 0, 1.5]}>
-        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} rotation={[Math.PI / 2, 0, 0]} />
+        <cylinderGeometry args={[0.4, 0.4, 0.2, 32]} />
         <meshStandardMaterial color="#111" />
       </mesh>
     </group>
@@ -99,8 +94,6 @@ export default function ThreeDCarAnimation() {
           position={[5, 5, 5]}
           intensity={0.8}
           castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
         />
         
         {/* Road */}
