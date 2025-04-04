@@ -3,6 +3,7 @@ import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import ThreeDCarAnimation from './ThreeDCarAnimation';
 
 const Hero: React.FC = () => {
   return (
@@ -47,51 +48,10 @@ const Hero: React.FC = () => {
           </div>
         </div>
         
-        <div className="w-full lg:w-1/2 mt-12 lg:mt-0 flex justify-center lg:justify-end">
-          <div className="relative w-full max-w-lg">
-            <div className="absolute top-0 -left-4 w-72 h-72 bg-traffic-yellow/30 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
-            <div className="absolute top-0 -right-4 w-72 h-72 bg-traffic-red/30 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
-            <div className="absolute -bottom-8 left-20 w-72 h-72 bg-traffic-green/30 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
-            <div className="relative">
-              <div className="bg-white rounded-lg shadow-xl overflow-hidden">
-                <div className="p-4 border-b border-gray-200 bg-gray-50">
-                  <div className="traffic-light mx-auto">
-                    <div className="traffic-light-circle red active"></div>
-                    <div className="traffic-light-circle yellow"></div>
-                    <div className="traffic-light-circle green"></div>
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="flex items-center space-x-4 mb-4">
-                    <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-xl font-bold">🍔</span>
-                    </div>
-                    <div>
-                      <h3 className="font-bold">Street Food Express</h3>
-                      <p className="text-sm text-gray-500">Ready in 5 mins at Signal #42</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm">Veg Burger</span>
-                      <span className="text-sm font-medium">₹80</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Masala Chai</span>
-                      <span className="text-sm font-medium">₹20</span>
-                    </div>
-                    <div className="border-t border-dashed border-gray-200 my-2"></div>
-                    <div className="flex justify-between font-bold">
-                      <span>Total</span>
-                      <span>₹100</span>
-                    </div>
-                  </div>
-                  <Button className="w-full mt-4 bg-traffic-green hover:bg-traffic-green/90">
-                    Ready for Pickup
-                  </Button>
-                </div>
-              </div>
-            </div>
+        <div className="w-full lg:w-1/2 mt-12 lg:mt-0">
+          <div className="relative w-full max-w-lg mx-auto">
+            {/* Replace the old card with the 3D animation */}
+            <ThreeDCarAnimation />
           </div>
         </div>
       </div>
