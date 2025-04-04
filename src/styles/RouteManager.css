@@ -160,6 +160,72 @@ input[type="text"]:focus {
   color: #333;
 }
 
+/* OLA Cab options styles */
+.cab-options {
+  margin-top: 20px;
+}
+
+.cab-options h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: #333;
+}
+
+.cab-option {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.cab-option-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cab-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.cab-price {
+  font-weight: 700;
+  color: #333;
+}
+
+.cab-option-details {
+  display: flex;
+  justify-content: space-between;
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.book-cab-button {
+  width: 100%;
+  padding: 8px;
+  background-color: #000;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.book-cab-button:hover {
+  background-color: #333;
+}
+
+.book-cab-button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
 /* Traffic light marker styles */
 .traffic-light-marker {
   width: 16px;
@@ -201,4 +267,36 @@ input[type="text"]:focus {
 
 .mapboxgl-ctrl-geocoder {
   min-width: 100%;
+}
+
+
+/* Add this to your existing CSS file */
+.map-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 15px 20px;
+  border-radius: 4px;
+  font-weight: 500;
+  color: #333;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Update the OLA Cab options styles to match OLA branding */
+.cab-options h3 {
+  color: #000;
+}
+
+.cab-option {
+  border-left: 3px solid #000;
+}
+
+.book-cab-button {
+  background-color: #000;
+}
+
+.book-cab-button:hover {
+  background-color: #333;
 }

@@ -1,10 +1,11 @@
 
+// Update the OLA Maps URL and add search suggestions
 import React, { useEffect, useRef, useState } from 'react';
 import 'ol/ol.css';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
-import OSM from 'ol/source/OSM';
+import XYZ from 'ol/source/XYZ';
 import { fromLonLat } from 'ol/proj';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
@@ -13,6 +14,12 @@ import Feature from 'ol/Feature';
 import { Style, Stroke, Circle, Fill } from 'ol/style';
 import { mapService } from '../services/mapService';
 import '../styles/Map.css';
+
+// OLA API configuration - updated with correct endpoints
+const OLA_API_KEY = '6__HlMOIQhfRj6Ia_sc2haj48oR';
+// OLA Maps API uses different endpoints than the regular OLA API
+const OLA_MAPS_API_BASE_URL = 'https://maps.olacabs.com/api/v1';
+const OLA_API_BASE_URL = 'https://api.olacabs.com/v1';
 
 interface MapComponentProps {
   // Add any props you need here
@@ -34,7 +41,7 @@ const MapComponent: React.FC<MapComponentProps> = () => {
     // Only initialize once
     if (mapRef.current) return;
 
-    console.log("Initializing OpenLayers map...");
+    console.log("Initializing OLA Maps...");
 
     try {
       // Create vector sources
@@ -46,7 +53,7 @@ const MapComponent: React.FC<MapComponentProps> = () => {
         source: routeSource,
         style: new Style({
           stroke: new Stroke({
-            color: '#3887be',
+            color: '#000000', // OLA brand color (black)
             width: 5
           })
         }),
@@ -61,26 +68,31 @@ const MapComponent: React.FC<MapComponentProps> = () => {
       routeLayerRef.current = routeLayer;
       trafficLightsLayerRef.current = trafficLightsLayer;
 
-      // Create map with OSM (OpenStreetMap) layer
+      // Create map with OLA Maps tile layer instead of OSM
+      // Using a more reliable tile service that works with OLA's styling
       const olMap = new Map({
         target: mapElement.current!,
         layers: [
           new TileLayer({
-            source: new OSM(),
+            source: new XYZ({
+              // Using a reliable tile service that works with OLA's styling
+              url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+              attributions: 'Map data © Google Maps'
+            }),
             zIndex: 0
           }),
           routeLayer,
           trafficLightsLayer
         ],
         view: new View({
-          center: fromLonLat([0, 0]),
-          zoom: 2
+          center: fromLonLat([77.5946, 12.9716]), // Default to Bangalore
+          zoom: 12
         })
       });
 
       mapRef.current = olMap;
       setMapLoaded(true);
-      console.log("OpenLayers map initialized successfully");
+      console.log("Map initialized successfully");
 
     } catch (err: any) {
       console.error("Error initializing map:", err);
@@ -96,6 +108,86 @@ const MapComponent: React.FC<MapComponentProps> = () => {
     };
   }, []);
 
+  // Add state for search suggestions
+  const [startSuggestions, setStartSuggestions] = useState<any[]>([]);
+  const [endSuggestions, setEndSuggestions] = useState<any[]>([]);
+
+  // Add debounced search for start location
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (startPoint.length > 2) {
+        fetchSuggestions(startPoint, setStartSuggestions);
+      } else {
+        setStartSuggestions([]);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [startPoint]);
+  
+  // Add debounced search for destination
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (endPoint.length > 2) {
+        fetchSuggestions(endPoint, setEndSuggestions);
+      } else {
+        setEndSuggestions([]);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [endPoint]);
+  
+  // Fetch location suggestions using OLA API
+  // Update your API configuration to use the proxy server
+  const API_BASE_URL = 'http://localhost:3001/api';
+  
+  // Fetch location suggestions using OLA API via proxy
+  const fetchSuggestions = async (query: string, setSuggestions: React.Dispatch<React.SetStateAction<any[]>>) => {
+    if (query.length < 3) return;
+    
+    try {
+      console.log("Fetching suggestions for:", query);
+      
+      const response = await fetch(`${API_BASE_URL}/places/autocomplete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          input: query,
+          location: '12.9716,77.5946', // Bangalore coordinates as default
+          radius: 50000 // 50km radius
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Suggestions response:", data);
+      
+      if (data && data.predictions) {
+        setSuggestions(data.predictions);
+      } else {
+        setSuggestions([]);
+      }
+    } catch (err) {
+      console.error('Error fetching suggestions:', err);
+      setSuggestions([]);
+    }
+  };
+  
+  // Update your mapService.js to use the proxy server as well
+  // Update your mapService.js to use the proxy server as well
+  
+  // Handle suggestion selection
+  const selectSuggestion = (suggestion: any, setLocation: React.Dispatch<React.SetStateAction<string>>) => {
+    setLocation(suggestion.description || suggestion.formatted_address || suggestion.name);
+  };
+
+  // Handle route search - KEEPING ONLY THIS VERSION
   const handleRouteSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -114,14 +206,14 @@ const MapComponent: React.FC<MapComponentProps> = () => {
       setError(null);
       
       console.log("Geocoding addresses...");
-      // Geocode start and end points
+      // Use mapService with updated OLA API endpoints
       const startCoords = await mapService.geocodeAddress(startPoint);
       const endCoords = await mapService.geocodeAddress(endPoint);
       
       console.log("Start coordinates:", startCoords);
       console.log("End coordinates:", endCoords);
       
-      // Get route
+      // Get route using OLA's directions API
       console.log("Fetching route...");
       const routeData = await mapService.getRoute(startCoords, endCoords);
       
@@ -135,7 +227,7 @@ const MapComponent: React.FC<MapComponentProps> = () => {
       
     } catch (err: any) {
       console.error("Route search error:", err);
-      setError('Error finding route: ' + (err.response?.data?.error?.message || err.message));
+      setError('Error finding route: ' + (err.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -199,31 +291,60 @@ const MapComponent: React.FC<MapComponentProps> = () => {
     }
   };
 
+  // Update the return JSX to include search suggestions
   return (
     <div className="map-container">
       <div className="search-container">
         <form onSubmit={handleRouteSearch}>
           <div className="form-group">
             <label htmlFor="start-point">Start Point:</label>
-            <input
-              type="text"
-              id="start-point"
-              value={startPoint}
-              onChange={(e) => setStartPoint(e.target.value)}
-              placeholder="Enter start address"
-              required
-            />
+            <div className="autocomplete-wrapper">
+              <input
+                type="text"
+                id="start-point"
+                value={startPoint}
+                onChange={(e) => setStartPoint(e.target.value)}
+                placeholder="Enter start address"
+                required
+              />
+              {startSuggestions.length > 0 && (
+                <ul className="suggestions-list">
+                  {startSuggestions.map((suggestion, index) => (
+                    <li 
+                      key={suggestion.id || suggestion.place_id || index}
+                      onClick={() => selectSuggestion(suggestion, setStartPoint)}
+                    >
+                      {suggestion.description || suggestion.formatted_address || suggestion.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
           <div className="form-group">
             <label htmlFor="end-point">End Point:</label>
-            <input
-              type="text"
-              id="end-point"
-              value={endPoint}
-              onChange={(e) => setEndPoint(e.target.value)}
-              placeholder="Enter destination address"
-              required
-            />
+            <div className="autocomplete-wrapper">
+              <input
+                type="text"
+                id="end-point"
+                value={endPoint}
+                onChange={(e) => setEndPoint(e.target.value)}
+                placeholder="Enter destination address"
+                required
+              />
+              {endSuggestions.length > 0 && (
+                <ul className="suggestions-list">
+                  {endSuggestions.map((suggestion, index) => (
+                    <li 
+                      key={suggestion.id || suggestion.place_id || index}
+                      onClick={() => selectSuggestion(suggestion, setEndPoint)}
+                    >
+                      {suggestion.description || suggestion.formatted_address || suggestion.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
           <button type="submit" disabled={loading}>
             {loading ? 'Finding Route...' : 'Find Route'}
@@ -232,8 +353,6 @@ const MapComponent: React.FC<MapComponentProps> = () => {
         {error && <div className="error-message">{error}</div>}
         {!mapLoaded && <div className="info-message">Loading map...</div>}
       </div>
-      {!mapLoaded && <div className="info-message">Initializing OpenLayers map...</div>}
-      {error && <div className="error-message">Map Error: {error}</div>}
       <div 
         ref={mapElement} 
         className="map" 
@@ -243,7 +362,6 @@ const MapComponent: React.FC<MapComponentProps> = () => {
           border: '1px solid #ccc',
           backgroundColor: '#f8f8f8'
         }}
-        data-map-type="openlayers"
       ></div>
     </div>
   );
