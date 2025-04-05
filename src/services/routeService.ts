@@ -16,10 +16,11 @@ export interface TrafficLight {
   vendorCount: number;
 }
 
-interface RouteData {
+export interface RouteData {
   distance: number; // in meters
   duration: number; // in seconds
   trafficLights: TrafficLight[];
+  geometry: any; // GeoJSON LineString for the route
 }
 
 // Mock traffic light data - in a real app, this would come from a backend
@@ -58,60 +59,120 @@ const trafficLightDatabase: TrafficLight[] = [
   },
 ];
 
-// Open Route Service API
-const ORS_API_KEY = "YOUR_OPEN_ROUTE_SERVICE_API_KEY"; // This should come from environment variables
-const ORS_API_URL = "https://api.openrouteservice.org/v2/directions/driving-car";
+// Mapbox API constants
+const MAPBOX_API_KEY = 'pk.eyJ1IjoiZXhhbXBsZXVzZXIiLCJhIjoiY2xoNnZ5MGRsMDI0dzNzcDdzamJzaDlmdCJ9.xmCJJoGABmEVWxGPBLWgQA';
 
+// Function to get location suggestions from Mapbox API
+export async function getSuggestions(query: string): Promise<Array<{
+  place_name: string;
+  center: [number, number];
+}>> {
+  if (!query || query.length < 3) return [];
+  
+  try {
+    const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_API_KEY}&autocomplete=true&limit=5`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch suggestions');
+    }
+    
+    const data = await response.json();
+    return data.features.map((feature: any) => ({
+      place_name: feature.place_name,
+      center: feature.center // [longitude, latitude] array
+    }));
+  } catch (error) {
+    console.error('Error fetching suggestions:', error);
+    return [];
+  }
+}
+
+// Function to geocode addresses (convert text to coordinates)
+export async function geocodeAddress(address: string): Promise<Coordinates | null> {
+  if (!address) return null;
+  
+  try {
+    const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_API_KEY}&limit=1`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Geocoding request failed');
+    }
+    
+    const data = await response.json();
+    if (!data.features || data.features.length === 0) {
+      return null;
+    }
+    
+    const [lng, lat] = data.features[0].center;
+    return { lng, lat };
+  } catch (error) {
+    console.error("Error geocoding address:", error);
+    toast.error("Failed to find location. Please check the address and try again.");
+    return null;
+  }
+}
+
+// Function to find traffic lights near the route
+function findNearbyTrafficLights(routeCoordinates: Array<[number, number]>): TrafficLight[] {
+  // Simple implementation: find traffic lights within a certain distance of the route
+  const nearbyLights: TrafficLight[] = [];
+  const MAX_DISTANCE = 0.01; // ~1km in decimal degrees
+  
+  routeCoordinates.forEach(([lng, lat]) => {
+    trafficLightDatabase.forEach(light => {
+      if (
+        !nearbyLights.find(l => l.id === light.id) && 
+        Math.abs(light.coordinates.lng - lng) < MAX_DISTANCE &&
+        Math.abs(light.coordinates.lat - lat) < MAX_DISTANCE
+      ) {
+        nearbyLights.push(light);
+      }
+    });
+  });
+  
+  return nearbyLights;
+}
+
+// Function to get route from Mapbox Directions API
 export async function getRoute(
   startCoordinates: Coordinates,
   endCoordinates: Coordinates
 ): Promise<RouteData | null> {
   try {
-    // In a real implementation, this would make an actual API call to Open Route Service
-    // For now, we'll simulate a response
+    const response = await fetch(
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoordinates.lng},${startCoordinates.lat};${endCoordinates.lng},${endCoordinates.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_API_KEY}`
+    );
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    if (!response.ok) {
+      throw new Error('Direction request failed');
+    }
     
-    // For demo purposes, we'll randomly select traffic lights that would be on the route
-    const randomTrafficLights = [...trafficLightDatabase]
-      .sort(() => 0.5 - Math.random())
-      .slice(0, Math.floor(Math.random() * 3) + 2);
+    const data = await response.json();
     
-    // Calculate mock distance and duration
-    const distance = Math.floor(Math.random() * 20000) + 10000; // 10-30 km
-    const duration = Math.floor(distance / 10) + 600; // Simple calculation for demo
+    if (!data.routes || data.routes.length === 0) {
+      toast.error("No routes found between these locations");
+      return null;
+    }
+    
+    const route = data.routes[0];
+    const routeGeometry = route.geometry;
+    
+    // Find traffic lights along the route
+    const trafficLights = findNearbyTrafficLights(routeGeometry.coordinates);
     
     return {
-      distance,
-      duration,
-      trafficLights: randomTrafficLights
+      distance: route.distance,
+      duration: route.duration,
+      trafficLights,
+      geometry: routeGeometry
     };
   } catch (error) {
     console.error("Error fetching route:", error);
     toast.error("Failed to calculate route. Please try again.");
-    return null;
-  }
-}
-
-// Function to geocode addresses (convert text to coordinates)
-// In a real app, this would use a geocoding API
-export async function geocodeAddress(address: string): Promise<Coordinates | null> {
-  try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // For demo purposes, return randomized coordinates near Bangalore, India
-    const baseCoordinates = { lng: 77.5946, lat: 12.9716 }; // Approximate center of Bangalore
-    const randomOffset = () => (Math.random() - 0.5) * 0.1; // +/- 0.05 degrees
-    
-    return {
-      lng: baseCoordinates.lng + randomOffset(),
-      lat: baseCoordinates.lat + randomOffset()
-    };
-  } catch (error) {
-    console.error("Error geocoding address:", error);
-    toast.error("Failed to find location. Please check the address and try again.");
     return null;
   }
 }

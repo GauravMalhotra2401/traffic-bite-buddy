@@ -6,6 +6,7 @@ import { TrafficLight } from '../services/routeService';
 interface MapComponentProps {
   startCoordinates?: { lng: number; lat: number };
   endCoordinates?: { lng: number; lat: number };
+  routeGeometry?: any;
   trafficLights?: TrafficLight[];
   isLoading?: boolean;
 }
@@ -13,6 +14,7 @@ interface MapComponentProps {
 const MapComponent: React.FC<MapComponentProps> = ({
   startCoordinates,
   endCoordinates,
+  routeGeometry,
   trafficLights = [],
   isLoading = false
 }) => {
@@ -147,52 +149,104 @@ const MapComponent: React.FC<MapComponentProps> = ({
               .addTo(mapElement);
           });
           
-          // Add route source and layer
-          mapElement.addSource('route', {
-            type: 'geojson',
-            data: {
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                type: 'LineString',
-                coordinates: [
-                  [startCoordinates.lng, startCoordinates.lat],
-                  [endCoordinates.lng, endCoordinates.lat]
-                ]
+          // Add route path using GeoJSON
+          if (routeGeometry) {
+            mapElement.addSource('route', {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {},
+                geometry: routeGeometry
               }
+            });
+            
+            mapElement.addLayer({
+              id: 'route',
+              type: 'line',
+              source: 'route',
+              layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              paint: {
+                'line-color': '#F97316',
+                'line-width': 4,
+                'line-opacity': 0.8
+              }
+            });
+            
+            // Fit the map to the route bounds
+            const bounds = new mapboxgl.default.LngLatBounds();
+            
+            // Extend bounds to include route coordinates
+            if (routeGeometry && routeGeometry.coordinates) {
+              routeGeometry.coordinates.forEach((coord: [number, number]) => {
+                bounds.extend(coord);
+              });
+            } else {
+              // Fallback if route geometry isn't available
+              bounds.extend([startCoordinates.lng, startCoordinates.lat]);
+              bounds.extend([endCoordinates.lng, endCoordinates.lat]);
             }
-          });
-          
-          mapElement.addLayer({
-            id: 'route',
-            type: 'line',
-            source: 'route',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': '#F97316',
-              'line-width': 4,
-              'line-opacity': 0.8
-            }
-          });
-          
-          // Fit the map to the route
-          const bounds = new mapboxgl.default.LngLatBounds()
-            .extend([startCoordinates.lng, startCoordinates.lat])
-            .extend([endCoordinates.lng, endCoordinates.lat]);
-          
-          // Extend bounds to include traffic lights
-          trafficLights.forEach(signal => {
-            bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
-          });
-          
-          // Fit map to bounds with padding
-          mapElement.fitBounds(bounds, {
-            padding: 50,
-            maxZoom: 15
-          });
+            
+            // Extend bounds to include traffic lights
+            trafficLights.forEach(signal => {
+              bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
+            });
+            
+            // Fit map to bounds with padding
+            mapElement.fitBounds(bounds, {
+              padding: 50,
+              maxZoom: 15
+            });
+          } else {
+            // Simple straight line fallback if no geometry
+            mapElement.addSource('route', {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                  type: 'LineString',
+                  coordinates: [
+                    [startCoordinates.lng, startCoordinates.lat],
+                    [endCoordinates.lng, endCoordinates.lat]
+                  ]
+                }
+              }
+            });
+            
+            mapElement.addLayer({
+              id: 'route',
+              type: 'line',
+              source: 'route',
+              layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              paint: {
+                'line-color': '#F97316',
+                'line-width': 4,
+                'line-opacity': 0.8
+              }
+            });
+            
+            // Fit the map to include start and end points
+            const bounds = new mapboxgl.default.LngLatBounds()
+              .extend([startCoordinates.lng, startCoordinates.lat])
+              .extend([endCoordinates.lng, endCoordinates.lat]);
+            
+            // Extend bounds to include traffic lights
+            trafficLights.forEach(signal => {
+              bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
+            });
+            
+            // Fit map to bounds with padding
+            mapElement.fitBounds(bounds, {
+              padding: 50,
+              maxZoom: 15
+            });
+          }
         }
       } catch (error) {
         console.error('Error updating map:', error);
@@ -201,7 +255,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     };
     
     updateMap();
-  }, [startCoordinates, endCoordinates, trafficLights, mapInitialized, isLoading, mapError]);
+  }, [startCoordinates, endCoordinates, routeGeometry, trafficLights, mapInitialized, isLoading, mapError]);
 
   return (
     <div className={`relative w-full h-full rounded-lg overflow-hidden ${isLoading ? 'opacity-50' : ''}`}>

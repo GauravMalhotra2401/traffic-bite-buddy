@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, MapPin, Navigation2, AlertCircle, Clock, Users } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { Search, Navigation2, AlertCircle, Clock, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +8,7 @@ import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import { useToast } from '@/hooks/use-toast';
 import MapComponent from '../components/MapComponent';
+import LocationAutocomplete from '../components/LocationAutocomplete';
 import { TrafficLight, geocodeAddress, getRoute } from '../services/routeService';
 
 const RoutePlanner: React.FC = () => {
@@ -24,7 +24,22 @@ const RoutePlanner: React.FC = () => {
   const [startCoordinates, setStartCoordinates] = useState<{ lng: number; lat: number } | undefined>(undefined);
   const [endCoordinates, setEndCoordinates] = useState<{ lng: number; lat: number } | undefined>(undefined);
   const [trafficLights, setTrafficLights] = useState<TrafficLight[]>([]);
+  const [routeGeometry, setRouteGeometry] = useState<any>(null);
   const { toast } = useToast();
+
+  const handleStartLocationChange = (location: string, coordinates?: { lng: number; lat: number }) => {
+    setStartLocation(location);
+    if (coordinates) {
+      setStartCoordinates(coordinates);
+    }
+  };
+
+  const handleDestinationChange = (location: string, coordinates?: { lng: number; lat: number }) => {
+    setDestination(location);
+    if (coordinates) {
+      setEndCoordinates(coordinates);
+    }
+  };
 
   const handleCalculateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,11 +56,19 @@ const RoutePlanner: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // Convert addresses to coordinates
-      const startCoords = await geocodeAddress(startLocation);
-      const endCoords = await geocodeAddress(destination);
+      // Convert addresses to coordinates if not already available from autocomplete
+      let start = startCoordinates;
+      let end = endCoordinates;
       
-      if (!startCoords || !endCoords) {
+      if (!start) {
+        start = await geocodeAddress(startLocation);
+      }
+      
+      if (!end) {
+        end = await geocodeAddress(destination);
+      }
+      
+      if (!start || !end) {
         toast({
           title: "Location error",
           description: "Could not find one or both locations. Please check the addresses.",
@@ -55,11 +78,11 @@ const RoutePlanner: React.FC = () => {
         return;
       }
       
-      setStartCoordinates(startCoords);
-      setEndCoordinates(endCoords);
+      setStartCoordinates(start);
+      setEndCoordinates(end);
       
       // Get route information
-      const routeData = await getRoute(startCoords, endCoords);
+      const routeData = await getRoute(start, end);
       
       if (!routeData) {
         setIsLoading(false);
@@ -68,6 +91,7 @@ const RoutePlanner: React.FC = () => {
       
       // Update state with route data
       setTrafficLights(routeData.trafficLights);
+      setRouteGeometry(routeData.geometry);
       setRouteInfo({
         distance: Math.round(routeData.distance / 100) / 10, // Convert to km with 1 decimal
         duration: Math.round(routeData.duration / 60), // Convert to minutes
@@ -116,34 +140,26 @@ const RoutePlanner: React.FC = () => {
                       <label className="text-sm font-medium" htmlFor="start-location">
                         Start Location
                       </label>
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                        <Input
-                          id="start-location"
-                          placeholder="Enter starting point"
-                          value={startLocation}
-                          onChange={(e) => setStartLocation(e.target.value)}
-                          className="pl-10"
-                          disabled={isLoading}
-                        />
-                      </div>
+                      <LocationAutocomplete
+                        value={startLocation}
+                        onChange={handleStartLocationChange}
+                        placeholder="Enter starting point"
+                        icon={<MapPin className="h-4 w-4 text-gray-500" />}
+                        disabled={isLoading}
+                      />
                     </div>
                     
                     <div className="space-y-2">
                       <label className="text-sm font-medium" htmlFor="destination">
                         Destination
                       </label>
-                      <div className="relative">
-                        <Navigation2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                        <Input
-                          id="destination"
-                          placeholder="Enter destination"
-                          value={destination}
-                          onChange={(e) => setDestination(e.target.value)}
-                          className="pl-10"
-                          disabled={isLoading}
-                        />
-                      </div>
+                      <LocationAutocomplete
+                        value={destination}
+                        onChange={handleDestinationChange}
+                        placeholder="Enter destination"
+                        icon={<Navigation2 className="h-4 w-4 text-gray-500" />}
+                        disabled={isLoading}
+                      />
                     </div>
                     
                     <Button type="submit" className="w-full" disabled={isLoading}>
@@ -194,35 +210,44 @@ const RoutePlanner: React.FC = () => {
                       </TabsList>
                       
                       <TabsContent value="list" className="mt-4 space-y-4 overflow-auto max-h-[400px]">
-                        {trafficLights.map((signal) => (
-                          <div key={signal.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h3 className="font-medium">{signal.name}</h3>
-                                <p className="text-sm text-gray-500">{signal.location}</p>
-                                <div className="flex items-center mt-2 text-sm text-gray-500">
-                                  <span className="inline-flex items-center mr-4">
-                                    <Clock className="h-3 w-3 mr-1 text-traffic-red" />
-                                    {signal.duration}s wait time
-                                  </span>
-                                  <span className="inline-flex items-center">
-                                    <Users className="h-3 w-3 mr-1" />
-                                    {signal.vendorCount} vendors
-                                  </span>
+                        {trafficLights.length > 0 ? (
+                          trafficLights.map((signal) => (
+                            <div key={signal.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h3 className="font-medium">{signal.name}</h3>
+                                  <p className="text-sm text-gray-500">{signal.location}</p>
+                                  <div className="flex items-center mt-2 text-sm text-gray-500">
+                                    <span className="inline-flex items-center mr-4">
+                                      <Clock className="h-3 w-3 mr-1 text-traffic-red" />
+                                      {signal.duration}s wait time
+                                    </span>
+                                    <span className="inline-flex items-center">
+                                      <Users className="h-3 w-3 mr-1" />
+                                      {signal.vendorCount} vendors
+                                    </span>
+                                  </div>
                                 </div>
+                                <Button size="sm">
+                                  View Vendors
+                                </Button>
                               </div>
-                              <Button size="sm">
-                                View Vendors
-                              </Button>
                             </div>
+                          ))
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-8">
+                            <p className="text-gray-500 text-center">
+                              No traffic signals found on this route.
+                            </p>
                           </div>
-                        ))}
+                        )}
                       </TabsContent>
                       
                       <TabsContent value="map" className="mt-4 h-[400px]">
                         <MapComponent 
                           startCoordinates={startCoordinates}
                           endCoordinates={endCoordinates}
+                          routeGeometry={routeGeometry}
                           trafficLights={trafficLights}
                           isLoading={isLoading}
                         />
