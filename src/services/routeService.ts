@@ -70,15 +70,18 @@ export async function getSuggestions(query: string): Promise<Array<{
   if (!query || query.length < 3) return [];
   
   try {
+    console.log('Fetching suggestions for:', query);
     const response = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_API_KEY}&autocomplete=true&limit=5`
     );
     
     if (!response.ok) {
-      throw new Error('Failed to fetch suggestions');
+      throw new Error(`Failed to fetch suggestions: ${response.status}`);
     }
     
     const data = await response.json();
+    console.log('Suggestions API response:', data);
+    
     return data.features.map((feature: any) => ({
       place_name: feature.place_name,
       center: feature.center // [longitude, latitude] array
@@ -94,6 +97,7 @@ export async function geocodeAddress(address: string): Promise<Coordinates | nul
   if (!address) return null;
   
   try {
+    console.log('Geocoding address:', address);
     const response = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_API_KEY}&limit=1`
     );
@@ -103,7 +107,10 @@ export async function geocodeAddress(address: string): Promise<Coordinates | nul
     }
     
     const data = await response.json();
+    console.log('Geocode response:', data);
+    
     if (!data.features || data.features.length === 0) {
+      console.warn('No geocoding results found for address:', address);
       return null;
     }
     
@@ -134,6 +141,7 @@ function findNearbyTrafficLights(routeCoordinates: Array<[number, number]>): Tra
     });
   });
   
+  console.log(`Found ${nearbyLights.length} traffic lights near the route`);
   return nearbyLights;
 }
 
@@ -143,17 +151,21 @@ export async function getRoute(
   endCoordinates: Coordinates
 ): Promise<RouteData | null> {
   try {
+    console.log('Calculating route from', startCoordinates, 'to', endCoordinates);
+    
     const response = await fetch(
       `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoordinates.lng},${startCoordinates.lat};${endCoordinates.lng},${endCoordinates.lat}?geometries=geojson&overview=full&access_token=${MAPBOX_API_KEY}`
     );
     
     if (!response.ok) {
-      throw new Error('Direction request failed');
+      throw new Error(`Direction request failed: ${response.status}`);
     }
     
     const data = await response.json();
+    console.log('Route data:', data);
     
     if (!data.routes || data.routes.length === 0) {
+      console.warn('No routes found between locations');
       toast.error("No routes found between these locations");
       return null;
     }
@@ -161,15 +173,24 @@ export async function getRoute(
     const route = data.routes[0];
     const routeGeometry = route.geometry;
     
+    if (!routeGeometry || !routeGeometry.coordinates || routeGeometry.coordinates.length === 0) {
+      console.warn('Route geometry is invalid', routeGeometry);
+      toast.error("Invalid route data received. Please try again.");
+      return null;
+    }
+    
     // Find traffic lights along the route
     const trafficLights = findNearbyTrafficLights(routeGeometry.coordinates);
     
-    return {
+    const routeData = {
       distance: route.distance,
       duration: route.duration,
       trafficLights,
       geometry: routeGeometry
     };
+    
+    console.log('Processed route data:', routeData);
+    return routeData;
   } catch (error) {
     console.error("Error fetching route:", error);
     toast.error("Failed to calculate route. Please try again.");

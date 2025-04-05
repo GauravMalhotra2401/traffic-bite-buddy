@@ -45,6 +45,11 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     setInputValue(newValue);
     onChange(newValue); // Update parent with text only
 
+    // Open popover when typing
+    if (newValue.length > 2) {
+      setOpen(true);
+    }
+
     // Debounce API calls
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
@@ -53,9 +58,16 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     if (newValue.length > 2) {
       setLoading(true);
       debounceTimer.current = setTimeout(async () => {
-        const results = await getSuggestions(newValue);
-        setSuggestions(results);
-        setLoading(false);
+        try {
+          const results = await getSuggestions(newValue);
+          setSuggestions(results);
+          console.log('Suggestions received:', results); // Debug log
+        } catch (error) {
+          console.error('Error fetching suggestions:', error);
+          setSuggestions([]);
+        } finally {
+          setLoading(false);
+        }
       }, 300);
     } else {
       setSuggestions([]);
@@ -84,7 +96,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               onChange={handleInputChange}
               placeholder={placeholder}
               className={icon ? "pl-10" : ""}
-              onClick={() => inputValue.length > 2 && setOpen(true)}
+              onFocus={() => inputValue.length > 2 && setOpen(true)}
               disabled={disabled}
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
