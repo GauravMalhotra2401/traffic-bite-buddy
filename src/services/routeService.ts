@@ -82,6 +82,10 @@ export async function getSuggestions(query: string): Promise<Array<{
     const data = await response.json();
     console.log('Suggestions API response:', data);
     
+    if (!data.features || data.features.length === 0) {
+      return [];
+    }
+    
     return data.features.map((feature: any) => ({
       place_name: feature.place_name,
       center: feature.center // [longitude, latitude] array
@@ -99,7 +103,7 @@ export async function geocodeAddress(address: string): Promise<Coordinates | nul
   try {
     console.log('Geocoding address:', address);
     const response = await fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_API_KEY}&limit=1`
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_API_KEY}&limit=1&types=address,place,locality,neighborhood,poi`
     );
     
     if (!response.ok) {
@@ -111,6 +115,7 @@ export async function geocodeAddress(address: string): Promise<Coordinates | nul
     
     if (!data.features || data.features.length === 0) {
       console.warn('No geocoding results found for address:', address);
+      toast.error("Address not found. Please try a different search term.");
       return null;
     }
     

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, ChevronsUpDown, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -35,6 +34,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setInputValue(value);
@@ -79,6 +79,24 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     setInputValue(suggestion.place_name);
     onChange(suggestion.place_name, { lng, lat });
     setOpen(false);
+    
+    // Keep focus on the input after selection
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prevent the default Command component behavior for tab and arrow keys
+    // This allows the user to continue typing
+    if (e.key === 'Tab' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.stopPropagation(); // Don't let the Command component capture these
+    }
+    
+    // Close the popover on Escape
+    if (e.key === 'Escape') {
+      setOpen(false);
+    }
   };
 
   return (
@@ -92,20 +110,28 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               </div>
             )}
             <Input
+              ref={inputRef}
               value={inputValue}
               onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
               placeholder={placeholder}
               className={icon ? "pl-10" : ""}
               onFocus={() => inputValue.length > 2 && setOpen(true)}
               disabled={disabled}
+              autoComplete="off" // Prevent browser autocomplete from interfering
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
             </div>
           </div>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] max-h-[300px] overflow-y-auto" align="start">
-          <Command>
+        <PopoverContent 
+          className="p-0 w-[var(--radix-popover-trigger-width)] max-h-[300px] overflow-y-auto" 
+          align="start"
+          sideOffset={8}
+          onOpenAutoFocus={(e) => e.preventDefault()} // Prevent auto focus on popover content
+        >
+          <Command shouldFilter={false}>
             <CommandList>
               <CommandGroup>
                 {loading && (
@@ -126,6 +152,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
                     key={index}
                     value={suggestion.place_name}
                     onSelect={() => handleSelectSuggestion(suggestion)}
+                    className="cursor-pointer"
                   >
                     <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
                     <span>{suggestion.place_name}</span>
