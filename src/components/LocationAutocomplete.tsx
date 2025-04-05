@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, ChevronsUpDown, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Command, CommandGroup, CommandItem } from "@/components/ui/command";
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
@@ -94,38 +94,40 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         </PopoverTrigger>
         <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] max-h-[300px] overflow-y-auto" align="start">
           <Command>
-            <CommandGroup>
-              {loading && (
-                <div className="flex items-center justify-center py-2">
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-                  <span className="ml-2 text-sm">Loading suggestions...</span>
-                </div>
-              )}
-              
-              {!loading && suggestions.length === 0 && inputValue.length > 2 && (
-                <p className="py-2 px-2 text-sm text-muted-foreground">
-                  No locations found
-                </p>
-              )}
-              
-              {!loading && suggestions.map((suggestion, index) => (
-                <CommandItem
-                  key={index}
-                  value={suggestion.place_name}
-                  onSelect={() => handleSelectSuggestion(suggestion)}
-                >
-                  <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <span>{suggestion.place_name}</span>
-                  <Check
-                    className={`ml-auto h-4 w-4 ${
-                      inputValue === suggestion.place_name
-                        ? 'opacity-100'
-                        : 'opacity-0'
-                    }`}
-                  />
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            <CommandList>
+              <CommandGroup>
+                {loading && (
+                  <div className="flex items-center justify-center py-2">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                    <span className="ml-2 text-sm">Loading suggestions...</span>
+                  </div>
+                )}
+                
+                {!loading && suggestions.length === 0 && inputValue.length > 2 && (
+                  <p className="py-2 px-2 text-sm text-muted-foreground">
+                    No locations found
+                  </p>
+                )}
+                
+                {!loading && suggestions.map((suggestion, index) => (
+                  <CommandItem
+                    key={index}
+                    value={suggestion.place_name}
+                    onSelect={() => handleSelectSuggestion(suggestion)}
+                  >
+                    <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>{suggestion.place_name}</span>
+                    <Check
+                      className={`ml-auto h-4 w-4 ${
+                        inputValue === suggestion.place_name
+                          ? 'opacity-100'
+                          : 'opacity-0'
+                      }`}
+                    />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
           </Command>
         </PopoverContent>
       </Popover>
