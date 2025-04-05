@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { TrafficLight } from '../services/routeService';
 
@@ -23,23 +22,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [mapInitialized, setMapInitialized] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string>(
-    'pk.eyJ1IjoiZXhhbXBsZXVzZXIiLCJhIjoiY2xoNnZ5MGRsMDI0dzNzcDdzamJzaDlmdCJ9.xmCJJoGABmEVWxGPBLWgQA'
+    'pk.eyJ1IjoidGVzdGluZ2JybyIsImEiOiJjbTkzMnRia3EwZ3E5MmtyNG9mbm1icTY4In0.2GNGgL3GHFrv5uqnToZ3Iw'
   );
 
-  // Dynamic import of mapbox-gl to handle SSR and potential load failures
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    // For demo purposes only - in production, use environment variables
     const loadMap = async () => {
       try {
-        // Dynamically import mapbox-gl
         const mapboxgl = await import('mapbox-gl');
         await import('mapbox-gl/dist/mapbox-gl.css');
         
         if (!mapContainer.current) return;
 
-        // Set access token
         mapboxgl.default.accessToken = mapboxToken;
         
         const defaultCenter = { lng: 77.5946, lat: 12.9716 }; // Bangalore, India
@@ -81,24 +76,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
     };
   }, [mapboxToken]);
 
-  // Update map when route data changes
   useEffect(() => {
     if (!map.current || !mapInitialized || isLoading || mapError) return;
 
-    // Dynamically import mapboxgl to handle operations
     const updateMap = async () => {
       try {
         const mapboxgl = await import('mapbox-gl');
         
-        // Clear existing markers and layers
         const mapElement = map.current;
         
-        // Remove existing markers
         document.querySelectorAll('.mapboxgl-marker').forEach(marker => {
           marker.remove();
         });
         
-        // Safely remove existing layers and sources
         try {
           if (mapElement.getLayer('route')) {
             mapElement.removeLayer('route');
@@ -110,21 +100,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
           console.log('Layer or source did not exist', e);
         }
         
-        // If we have start and end coordinates, show them and fit the map
         if (startCoordinates && endCoordinates) {
-          // Add start marker
           new mapboxgl.default.Marker({ color: '#22C55E' })
             .setLngLat([startCoordinates.lng, startCoordinates.lat])
             .addTo(mapElement);
           
-          // Add end marker
           new mapboxgl.default.Marker({ color: '#F97316' })
             .setLngLat([endCoordinates.lng, endCoordinates.lat])
             .addTo(mapElement);
           
-          // Add traffic light markers
           trafficLights.forEach(signal => {
-            // Create custom element for the traffic light marker
             const el = document.createElement('div');
             el.className = 'traffic-light-marker';
             el.style.width = '20px';
@@ -134,7 +119,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
             el.style.border = '2px solid white';
             el.style.boxShadow = '0 0 0 2px #F97316';
             
-            // Add the marker
             const popup = new mapboxgl.default.Popup({ offset: 25 })
               .setHTML(
                 `<h3 class="font-bold">${signal.name}</h3>
@@ -149,7 +133,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
               .addTo(mapElement);
           });
           
-          // Add route path using GeoJSON
           if (routeGeometry) {
             mapElement.addSource('route', {
               type: 'geojson',
@@ -175,32 +158,26 @@ const MapComponent: React.FC<MapComponentProps> = ({
               }
             });
             
-            // Fit the map to the route bounds
             const bounds = new mapboxgl.default.LngLatBounds();
             
-            // Extend bounds to include route coordinates
             if (routeGeometry && routeGeometry.coordinates) {
               routeGeometry.coordinates.forEach((coord: [number, number]) => {
                 bounds.extend(coord);
               });
             } else {
-              // Fallback if route geometry isn't available
               bounds.extend([startCoordinates.lng, startCoordinates.lat]);
               bounds.extend([endCoordinates.lng, endCoordinates.lat]);
             }
             
-            // Extend bounds to include traffic lights
             trafficLights.forEach(signal => {
               bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
             });
             
-            // Fit map to bounds with padding
             mapElement.fitBounds(bounds, {
               padding: 50,
               maxZoom: 15
             });
           } else {
-            // Simple straight line fallback if no geometry
             mapElement.addSource('route', {
               type: 'geojson',
               data: {
@@ -231,17 +208,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
               }
             });
             
-            // Fit the map to include start and end points
             const bounds = new mapboxgl.default.LngLatBounds()
               .extend([startCoordinates.lng, startCoordinates.lat])
               .extend([endCoordinates.lng, endCoordinates.lat]);
             
-            // Extend bounds to include traffic lights
             trafficLights.forEach(signal => {
               bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
             });
             
-            // Fit map to bounds with padding
             mapElement.fitBounds(bounds, {
               padding: 50,
               maxZoom: 15

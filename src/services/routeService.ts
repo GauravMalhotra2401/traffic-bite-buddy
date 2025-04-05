@@ -60,7 +60,7 @@ const trafficLightDatabase: TrafficLight[] = [
 ];
 
 // Mapbox API constants
-const MAPBOX_API_KEY = 'pk.eyJ1IjoiZXhhbXBsZXVzZXIiLCJhIjoiY2xoNnZ5MGRsMDI0dzNzcDdzamJzaDlmdCJ9.xmCJJoGABmEVWxGPBLWgQA';
+const MAPBOX_API_KEY = 'pk.eyJ1IjoidGVzdGluZ2JybyIsImEiOiJjbTkzMnRia3EwZ3E5MmtyNG9mbm1icTY4In0.2GNGgL3GHFrv5uqnToZ3Iw';
 
 // Function to get location suggestions from Mapbox API
 export async function getSuggestions(query: string): Promise<Array<{
