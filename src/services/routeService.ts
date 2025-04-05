@@ -23,41 +23,11 @@ export interface RouteData {
   geometry: any; // GeoJSON LineString for the route
 }
 
-// Mock traffic light data - in a real app, this would come from a backend
-const trafficLightDatabase: TrafficLight[] = [
-  {
-    id: "tl1",
-    name: "Signal #42",
-    location: "MG Road & 11th Cross",
-    coordinates: { lng: 77.5946, lat: 12.9716 },
-    duration: 90,
-    vendorCount: 5
-  },
-  {
-    id: "tl2",
-    name: "Signal #28",
-    location: "Ring Road & KR Puram",
-    coordinates: { lng: 77.7006, lat: 13.0025 },
-    duration: 120,
-    vendorCount: 8
-  },
-  {
-    id: "tl3",
-    name: "Signal #15",
-    location: "Silk Board Junction",
-    coordinates: { lng: 77.6227, lat: 12.9170 },
-    duration: 180,
-    vendorCount: 12
-  },
-  {
-    id: "tl4",
-    name: "Signal #36",
-    location: "Hebbal Flyover",
-    coordinates: { lng: 77.5957, lat: 13.0358 },
-    duration: 75,
-    vendorCount: 4
-  },
-];
+// Mock traffic light data for vendors information - in a real app, this would come from a backend
+const trafficLightVendorData: Record<string, number> = {
+  // Will be used to assign vendor counts to discovered traffic lights
+  "default": 5,
+};
 
 // Mapbox API constants
 const MAPBOX_API_KEY = 'pk.eyJ1IjoidGVzdGluZ2JybyIsImEiOiJjbTkzMnRia3EwZ3E5MmtyNG9mbm1icTY4In0.2GNGgL3GHFrv5uqnToZ3Iw';
@@ -128,26 +98,184 @@ export async function geocodeAddress(address: string): Promise<Coordinates | nul
   }
 }
 
-// Function to find traffic lights near the route
-function findNearbyTrafficLights(routeCoordinates: Array<[number, number]>): TrafficLight[] {
-  // Simple implementation: find traffic lights within a certain distance of the route
-  const nearbyLights: TrafficLight[] = [];
-  const MAX_DISTANCE = 0.01; // ~1km in decimal degrees
+// Function to find traffic lights near the route using Overpass API
+async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, number]>): Promise<TrafficLight[]> {
+  if (!routeCoordinates || routeCoordinates.length === 0) {
+    console.warn('No route coordinates provided for traffic light search');
+    return [];
+  }
   
-  routeCoordinates.forEach(([lng, lat]) => {
-    trafficLightDatabase.forEach(light => {
-      if (
-        !nearbyLights.find(l => l.id === light.id) && 
-        Math.abs(light.coordinates.lng - lng) < MAX_DISTANCE &&
-        Math.abs(light.coordinates.lat - lat) < MAX_DISTANCE
-      ) {
-        nearbyLights.push(light);
+  try {
+    console.log('Fetching traffic lights along route with coordinates:', routeCoordinates);
+    
+    // Create a bounding box that encompasses the entire route with some padding
+    let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+    routeCoordinates.forEach(([lng, lat]) => {
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+    });
+    
+    // Add padding to the bounding box (approximately 500m)
+    const padding = 0.005; // ~500m in decimal degrees
+    minLat -= padding;
+    maxLat += padding;
+    minLng -= padding;
+    maxLng += padding;
+    
+    // Construct Overpass API query
+    // This query finds traffic signals within the bounding box
+    const overpassQuery = `
+      [out:json];
+      (
+        node["highway"="traffic_signals"](${minLat},${minLng},${maxLat},${maxLng});
+      );
+      out body;
+    `;
+    
+    console.log('Overpass query:', overpassQuery);
+    
+    // Make request to Overpass API
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `data=${encodeURIComponent(overpassQuery)}`,
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Overpass API request failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Overpass API response:', data);
+    
+    if (!data.elements) {
+      return [];
+    }
+    
+    // Process traffic lights from Overpass API response
+    const MAX_DISTANCE = 0.002; // ~200m in decimal degrees
+    const nearbyLights: TrafficLight[] = [];
+    const processedIds = new Set<string>();
+    
+    // Helper function to check if a traffic light is near the route
+    function isNearRoute(lightLng: number, lightLat: number): boolean {
+      for (let i = 0; i < routeCoordinates.length; i++) {
+        const [routeLng, routeLat] = routeCoordinates[i];
+        // Simple distance check in decimal degrees
+        if (
+          Math.abs(lightLng - routeLng) < MAX_DISTANCE &&
+          Math.abs(lightLat - routeLat) < MAX_DISTANCE
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    // Extract relevant information from each traffic light
+    data.elements.forEach((element: any) => {
+      const id = `tl${element.id}`;
+      
+      // Skip if already processed
+      if (processedIds.has(id)) return;
+      
+      // Check if the traffic light is close enough to the route
+      if (isNearRoute(element.lon, element.lat)) {
+        processedIds.add(id);
+        
+        const name = element.tags?.name || `Traffic Signal #${element.id.toString().slice(-4)}`;
+        const location = element.tags?.road || element.tags?.description || 'Unknown Intersection';
+        
+        // Random duration between 40-180 seconds
+        const duration = Math.floor(Math.random() * 140) + 40;
+        
+        // Random vendor count or use default
+        const vendorCount = trafficLightVendorData[id] || trafficLightVendorData.default || 
+                         Math.floor(Math.random() * 10) + 1;
+        
+        nearbyLights.push({
+          id,
+          name,
+          location,
+          coordinates: { lng: element.lon, lat: element.lat },
+          duration,
+          vendorCount
+        });
       }
     });
-  });
+    
+    console.log(`Found ${nearbyLights.length} traffic lights near the route`);
+    return nearbyLights;
+  } catch (error) {
+    console.error('Error fetching traffic lights:', error);
+    toast.error("Failed to fetch traffic signals data. Using estimated data instead.");
+    
+    // Fallback to estimated traffic lights if the API fails
+    return estimateTrafficLights(routeCoordinates);
+  }
+}
+
+// Fallback function to estimate traffic lights based on route distance
+function estimateTrafficLights(routeCoordinates: Array<[number, number]>): TrafficLight[] {
+  if (routeCoordinates.length < 2) return [];
   
-  console.log(`Found ${nearbyLights.length} traffic lights near the route`);
-  return nearbyLights;
+  // Estimate one traffic light every ~1km
+  const estimatedCount = Math.max(1, Math.floor(calculateRouteDistance(routeCoordinates) / 1000));
+  const lights: TrafficLight[] = [];
+  
+  // Place traffic lights at regular intervals along the route
+  for (let i = 1; i < estimatedCount + 1; i++) {
+    const index = Math.floor((routeCoordinates.length - 1) * (i / (estimatedCount + 1)));
+    const [lng, lat] = routeCoordinates[index];
+    
+    lights.push({
+      id: `estimated-${i}`,
+      name: `Estimated Signal #${i}`,
+      location: `Route Point ${i}`,
+      coordinates: { lng, lat },
+      duration: Math.floor(Math.random() * 120) + 60, // 60-180 seconds
+      vendorCount: Math.floor(Math.random() * 8) + 1 // 1-8 vendors
+    });
+  }
+  
+  return lights;
+}
+
+// Calculate route distance in meters
+function calculateRouteDistance(coordinates: Array<[number, number]>): number {
+  let distance = 0;
+  
+  for (let i = 1; i < coordinates.length; i++) {
+    distance += getDistanceFromLatLonInMeters(
+      coordinates[i-1][1], coordinates[i-1][0],
+      coordinates[i][1], coordinates[i][0]
+    );
+  }
+  
+  return distance;
+}
+
+// Haversine formula to calculate distance between two points
+function getDistanceFromLatLonInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function deg2rad(deg: number): number {
+  return deg * (Math.PI/180);
 }
 
 // Function to get route from Mapbox Directions API
@@ -184,8 +312,8 @@ export async function getRoute(
       return null;
     }
     
-    // Find traffic lights along the route
-    const trafficLights = findNearbyTrafficLights(routeGeometry.coordinates);
+    // Find traffic lights along the route using Overpass API
+    const trafficLights = await fetchTrafficLightsAlongRoute(routeGeometry.coordinates);
     
     const routeData = {
       distance: route.distance,
