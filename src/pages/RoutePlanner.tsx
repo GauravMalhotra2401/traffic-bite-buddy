@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Search, Navigation2, AlertCircle, Clock, Users, MapPin } from 'lucide-react';
+import { Search, Navigation2, AlertCircle, Clock, Users, MapPin, Utensils, X, ExternalLink, Phone, Wifi, Car, Accessibility, CreditCard, DollarSign, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import MapComponent from '../components/MapComponent';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { TrafficLight, geocodeAddress, getRoute } from '../services/routeService';
+import { Restaurant, RestaurantsByTrafficLight, fetchRestaurantsForRoute } from '../services/restaurantService';
 
 const RoutePlanner: React.FC = () => {
   const [startLocation, setStartLocation] = useState('');
@@ -25,6 +25,8 @@ const RoutePlanner: React.FC = () => {
   const [endCoordinates, setEndCoordinates] = useState<{ lng: number; lat: number } | undefined>(undefined);
   const [trafficLights, setTrafficLights] = useState<TrafficLight[]>([]);
   const [routeGeometry, setRouteGeometry] = useState<any>(null);
+  const [restaurantsByLight, setRestaurantsByLight] = useState<RestaurantsByTrafficLight[]>([]);
+  const [selectedTrafficLight, setSelectedTrafficLight] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleStartLocationChange = (location: string, coordinates?: { lng: number; lat: number }) => {
@@ -54,6 +56,7 @@ const RoutePlanner: React.FC = () => {
     }
     
     setIsLoading(true);
+    setSelectedTrafficLight(null);
     
     try {
       // Convert addresses to coordinates if not already available from autocomplete
@@ -93,10 +96,14 @@ const RoutePlanner: React.FC = () => {
       setTrafficLights(routeData.trafficLights);
       setRouteGeometry(routeData.geometry);
       setRouteInfo({
-        distance: Math.round(routeData.distance / 100) / 10, // Convert to km with 1 decimal
-        duration: Math.round(routeData.duration / 60), // Convert to minutes
+        distance: Math.round(routeData.distance / 100) / 10,
+        duration: Math.round(routeData.duration / 60),
         trafficLightsCount: routeData.trafficLights.length
       });
+
+      // Fetch restaurants for all traffic lights
+      const restaurants = await fetchRestaurantsForRoute(routeData.trafficLights);
+      setRestaurantsByLight(restaurants);
       
       setRouteCalculated(true);
       
@@ -114,6 +121,10 @@ const RoutePlanner: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleViewVendors = (signalId: string) => {
+    setSelectedTrafficLight(selectedTrafficLight === signalId ? null : signalId);
   };
 
   return (
@@ -211,29 +222,248 @@ const RoutePlanner: React.FC = () => {
                       
                       <TabsContent value="list" className="mt-4 space-y-4 overflow-auto max-h-[400px]">
                         {trafficLights.length > 0 ? (
-                          trafficLights.map((signal) => (
-                            <div key={signal.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <h3 className="font-medium">{signal.name}</h3>
-                                  <p className="text-sm text-gray-500">{signal.location}</p>
-                                  <div className="flex items-center mt-2 text-sm text-gray-500">
-                                    <span className="inline-flex items-center mr-4">
-                                      <Clock className="h-3 w-3 mr-1 text-traffic-red" />
-                                      {signal.duration}s wait time
-                                    </span>
-                                    <span className="inline-flex items-center">
-                                      <Users className="h-3 w-3 mr-1" />
-                                      {signal.vendorCount} vendors
-                                    </span>
+                          trafficLights.map((signal) => {
+                            const restaurants = restaurantsByLight.find(r => r.trafficLightId === signal.id)?.restaurants || [];
+                            const isSelected = selectedTrafficLight === signal.id;
+                            
+                            return (
+                              <div key={signal.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <h3 className="font-medium">{signal.name}</h3>
+                                    <p className="text-sm text-gray-500">{signal.location}</p>
+                                    <div className="flex items-center mt-2 text-sm text-gray-500">
+                                      <span className="inline-flex items-center mr-4">
+                                        <Clock className="h-3 w-3 mr-1 text-traffic-red" />
+                                        {signal.duration}s wait time
+                                      </span>
+                                      <span className="inline-flex items-center">
+                                        <Utensils className="h-3 w-3 mr-1" />
+                                        {restaurants.length} restaurants
+                                      </span>
+                                    </div>
                                   </div>
+                                  <Button 
+                                    size="sm"
+                                    variant={isSelected ? "secondary" : "default"}
+                                    onClick={() => handleViewVendors(signal.id)}
+                                  >
+                                    {isSelected ? (
+                                      <>
+                                        <X className="h-3 w-3 mr-1" />
+                                        Close
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Utensils className="h-3 w-3 mr-1" />
+                                        View Restaurants
+                                      </>
+                                    )}
+                                  </Button>
                                 </div>
-                                <Button size="sm">
-                                  View Vendors
-                                </Button>
+                                
+                                {isSelected && restaurants.length > 0 && (
+                                  <div className="mt-4 pl-4 border-l-2 border-amber-500">
+                                    <h4 className="text-sm font-medium mb-2">Nearby Restaurants</h4>
+                                    <div className="space-y-6">
+                                      {restaurants.map(restaurant => (
+                                        <div key={restaurant.id} className="text-sm bg-gray-50 rounded-lg p-4">
+                                          <div className="flex justify-between items-start">
+                                            <div>
+                                              <div className="font-medium text-base">{restaurant.name}</div>
+                                              <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
+                                                  {restaurant.type}
+                                                </span>
+                                                {restaurant.isMobile && (
+                                                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                                                    Mobile Vendor
+                                                  </span>
+                                                )}
+                                                {restaurant.isTemporary && (
+                                                  <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full">
+                                                    Temporary
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {restaurant.cuisine && (
+                                                <div className="text-gray-600 mt-1">{restaurant.cuisine}</div>
+                                              )}
+                                            </div>
+                                            {restaurant.website && (
+                                              <a 
+                                                href={restaurant.website} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-amber-600 hover:text-amber-700"
+                                              >
+                                                <ExternalLink className="h-4 w-4" />
+                                              </a>
+                                            )}
+                                          </div>
+
+                                          <div className="mt-2 space-y-2">
+                                            {restaurant.address && (
+                                              <div className="flex items-start text-gray-600">
+                                                <MapPin className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                                                <span>{restaurant.address}</span>
+                                              </div>
+                                            )}
+                                            
+                                            {restaurant.phoneNumber && (
+                                              <div className="flex items-center text-gray-600">
+                                                <Phone className="h-4 w-4 mr-2 flex-shrink-0" />
+                                                <a href={`tel:${restaurant.phoneNumber}`} className="hover:text-amber-600">
+                                                  {restaurant.phoneNumber}
+                                                </a>
+                                              </div>
+                                            )}
+
+                                            {(restaurant.openingHours || restaurant.servingTime) && (
+                                              <div className="flex items-start text-gray-600">
+                                                <Clock className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                                                <div>
+                                                  {restaurant.servingTime ? (
+                                                    <div>Serving Time: {restaurant.servingTime}</div>
+                                                  ) : (
+                                                    Object.entries(restaurant.openingHours!).map(([day, hours]) => (
+                                                      <div key={day}>{hours}</div>
+                                                    ))
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {restaurant.specialties && restaurant.specialties.length > 0 && (
+                                            <div className="mt-3">
+                                              <div className="text-xs font-medium text-gray-500 mb-1">Specialties:</div>
+                                              <div className="flex flex-wrap gap-2">
+                                                {restaurant.specialties.map(specialty => (
+                                                  <span 
+                                                    key={specialty}
+                                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-50 text-orange-700"
+                                                  >
+                                                    {specialty}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {restaurant.paymentMethods && restaurant.paymentMethods.length > 0 && (
+                                            <div className="mt-3">
+                                              <div className="text-xs font-medium text-gray-500 mb-1">Payment Accepted:</div>
+                                              <div className="flex flex-wrap gap-2">
+                                                {restaurant.paymentMethods.map(method => (
+                                                  <span 
+                                                    key={method}
+                                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700"
+                                                  >
+                                                    <CreditCard className="h-3 w-3 mr-1" />
+                                                    {method}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          <div className="mt-3 flex flex-wrap gap-2">
+                                            {restaurant.features?.map(feature => (
+                                              <span 
+                                                key={feature}
+                                                className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700"
+                                              >
+                                                {feature === 'Wi-Fi' && <Wifi className="h-3 w-3 mr-1" />}
+                                                {feature === 'Outdoor Seating' && <Users className="h-3 w-3 mr-1" />}
+                                                {feature === 'Takeout' && <Car className="h-3 w-3 mr-1" />}
+                                                {feature === 'Wheelchair Accessible' && <Accessibility className="h-3 w-3 mr-1" />}
+                                                {feature}
+                                              </span>
+                                            ))}
+                                          </div>
+
+                                          {restaurant.dietaryOptions && restaurant.dietaryOptions.length > 0 && (
+                                            <div className="mt-3">
+                                              <div className="text-xs font-medium text-gray-500 mb-1">Dietary Options:</div>
+                                              <div className="flex flex-wrap gap-2">
+                                                {restaurant.dietaryOptions.map(option => (
+                                                  <span 
+                                                    key={option}
+                                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-50 text-green-700"
+                                                  >
+                                                    {option}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          <div className="mt-3 flex items-center gap-4">
+                                            {restaurant.isOpen !== undefined && (
+                                              <span className={`text-xs font-medium ${restaurant.isOpen ? 'text-green-600' : 'text-red-600'}`}>
+                                                {restaurant.isOpen ? 'Open' : 'Closed'}
+                                              </span>
+                                            )}
+                                            {restaurant.rating && (
+                                              <span className="text-xs text-amber-600 font-medium">
+                                                Rating: {restaurant.rating}/5
+                                              </span>
+                                            )}
+                                            {restaurant.priceLevel && (
+                                              <span className="text-xs text-gray-600">
+                                                {'$'.repeat(restaurant.priceLevel)}
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          {restaurant.popularDishes && restaurant.popularDishes.length > 0 && (
+                                            <div className="mt-3">
+                                              <div className="text-xs font-medium text-gray-500 mb-1">Popular Dishes:</div>
+                                              <div className="flex flex-wrap gap-2">
+                                                {restaurant.popularDishes.map(dish => (
+                                                  <span 
+                                                    key={dish}
+                                                    className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-amber-50 text-amber-700"
+                                                  >
+                                                    {dish}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {restaurant.reviews && restaurant.reviews.length > 0 && (
+                                            <div className="mt-4">
+                                              <div className="text-xs font-medium text-gray-500 mb-2">Recent Reviews</div>
+                                              <div className="space-y-2">
+                                                {restaurant.reviews.slice(0, 2).map((review, index) => (
+                                                  <div key={index} className="bg-white p-2 rounded border text-xs">
+                                                    <div className="flex justify-between">
+                                                      <span className="font-medium">{review.author}</span>
+                                                      <span className="text-amber-600">{review.rating}/5</span>
+                                                    </div>
+                                                    <p className="mt-1 text-gray-600">{review.text}</p>
+                                                    <div className="mt-1 text-gray-400">{review.date}</div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {isSelected && restaurants.length === 0 && (
+                                  <div className="mt-4 pl-4 border-l-2 border-gray-200">
+                                    <p className="text-sm text-gray-500">No restaurants found near this traffic light.</p>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          ))
+                            );
+                          })
                         ) : (
                           <div className="flex flex-col items-center justify-center py-8">
                             <p className="text-gray-500 text-center">
@@ -256,21 +486,15 @@ const RoutePlanner: React.FC = () => {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg border border-dashed border-gray-200 p-12">
-                  <div className="text-center">
-                    <div className="mx-auto w-16 h-16 mb-4">
-                      <div className="traffic-light">
-                        <div className="traffic-light-circle red"></div>
-                        <div className="traffic-light-circle yellow"></div>
-                        <div className="traffic-light-circle green"></div>
-                      </div>
+                <Card className="h-full flex items-center justify-center">
+                  <CardContent>
+                    <div className="text-center">
+                      <p className="text-gray-500">
+                        Enter your route details to see traffic signals and nearby restaurants
+                      </p>
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">Plan your route</h3>
-                    <p className="text-gray-500 max-w-md mx-auto">
-                      Enter your start and destination locations to find traffic signals along your route and available food vendors.
-                    </p>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
           </div>

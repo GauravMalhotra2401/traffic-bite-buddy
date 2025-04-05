@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TrafficLight } from '../services/routeService';
+import { Restaurant, RestaurantsByTrafficLight, fetchRestaurantsForRoute } from '../services/restaurantService';
 
 // Define the props interface
 interface MapComponentProps {
@@ -21,9 +22,17 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const map = useRef<any | null>(null);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [mapboxToken, setMapboxToken] = useState<string>(
+  const [restaurantsByLight, setRestaurantsByLight] = useState<RestaurantsByTrafficLight[]>([]);
+  const [mapboxToken] = useState<string>(
     'pk.eyJ1IjoidGVzdGluZ2JybyIsImEiOiJjbTkzMnRia3EwZ3E5MmtyNG9mbm1icTY4In0.2GNGgL3GHFrv5uqnToZ3Iw'
   );
+
+  // Fetch restaurants when traffic lights change
+  useEffect(() => {
+    if (trafficLights.length > 0) {
+      fetchRestaurantsForRoute(trafficLights).then(setRestaurantsByLight);
+    }
+  }, [trafficLights]);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -85,10 +94,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         const mapElement = map.current;
         
+        // Remove existing markers
         document.querySelectorAll('.mapboxgl-marker').forEach(marker => {
           marker.remove();
         });
         
+        // Remove existing layers and sources
         try {
           if (mapElement.getLayer('route')) {
             mapElement.removeLayer('route');
@@ -101,14 +112,17 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
         
         if (startCoordinates && endCoordinates) {
+          // Add start marker
           new mapboxgl.default.Marker({ color: '#22C55E' })
             .setLngLat([startCoordinates.lng, startCoordinates.lat])
             .addTo(mapElement);
           
+          // Add end marker
           new mapboxgl.default.Marker({ color: '#F97316' })
             .setLngLat([endCoordinates.lng, endCoordinates.lat])
             .addTo(mapElement);
           
+          // Add traffic light markers with restaurant info
           trafficLights.forEach(signal => {
             const el = document.createElement('div');
             el.className = 'traffic-light-marker';
@@ -119,18 +133,44 @@ const MapComponent: React.FC<MapComponentProps> = ({
             el.style.border = '2px solid white';
             el.style.boxShadow = '0 0 0 2px #F97316';
             
+            const restaurants = restaurantsByLight.find(r => r.trafficLightId === signal.id)?.restaurants || [];
+            
             const popup = new mapboxgl.default.Popup({ offset: 25 })
               .setHTML(
-                `<h3 class="font-bold">${signal.name}</h3>
-                <p>${signal.location}</p>
-                <p>Wait time: ${signal.duration}s</p>
-                <p>Vendors: ${signal.vendorCount}</p>`
+                `<div class="p-2">
+                  <h3 class="font-bold">${signal.name}</h3>
+                  <p>${signal.location}</p>
+                  <p>Wait time: ${signal.duration}s</p>
+                  <p>Restaurants nearby: ${restaurants.length}</p>
+                </div>`
               );
               
             new mapboxgl.default.Marker(el)
               .setLngLat([signal.coordinates.lng, signal.coordinates.lat])
               .setPopup(popup)
               .addTo(mapElement);
+
+            // Add restaurant markers
+            restaurants.forEach(restaurant => {
+              const restaurantEl = document.createElement('div');
+              restaurantEl.className = 'restaurant-marker';
+              restaurantEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#D97706" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v2H3zM3 10h18v2H3zM3 14h18v2H3zM3 18h18v2H3z"/></svg>`;
+              
+              const restaurantPopup = new mapboxgl.default.Popup({ offset: 25 })
+                .setHTML(
+                  `<div class="p-2">
+                    <h3 class="font-bold">${restaurant.name}</h3>
+                    ${restaurant.cuisine ? `<p class="text-sm">Cuisine: ${restaurant.cuisine}</p>` : ''}
+                    ${restaurant.address ? `<p class="text-sm">${restaurant.address}</p>` : ''}
+                    ${restaurant.isOpen !== undefined ? `<p class="text-sm">${restaurant.isOpen ? 'Open' : 'Closed'}</p>` : ''}
+                  </div>`
+                );
+
+              new mapboxgl.default.Marker(restaurantEl)
+                .setLngLat([restaurant.location.lng, restaurant.location.lat])
+                .setPopup(restaurantPopup)
+                .addTo(mapElement);
+            });
           });
           
           if (routeGeometry) {
@@ -160,60 +200,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
             
             const bounds = new mapboxgl.default.LngLatBounds();
             
+            // Extend bounds with route coordinates
             if (routeGeometry && routeGeometry.coordinates) {
               routeGeometry.coordinates.forEach((coord: [number, number]) => {
                 bounds.extend(coord);
               });
-            } else {
-              bounds.extend([startCoordinates.lng, startCoordinates.lat]);
-              bounds.extend([endCoordinates.lng, endCoordinates.lat]);
             }
             
-            trafficLights.forEach(signal => {
-              bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
-            });
-            
-            mapElement.fitBounds(bounds, {
-              padding: 50,
-              maxZoom: 15
-            });
-          } else {
-            mapElement.addSource('route', {
-              type: 'geojson',
-              data: {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                  type: 'LineString',
-                  coordinates: [
-                    [startCoordinates.lng, startCoordinates.lat],
-                    [endCoordinates.lng, endCoordinates.lat]
-                  ]
-                }
-              }
-            });
-            
-            mapElement.addLayer({
-              id: 'route',
-              type: 'line',
-              source: 'route',
-              layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-              },
-              paint: {
-                'line-color': '#F97316',
-                'line-width': 4,
-                'line-opacity': 0.8
-              }
-            });
-            
-            const bounds = new mapboxgl.default.LngLatBounds()
-              .extend([startCoordinates.lng, startCoordinates.lat])
-              .extend([endCoordinates.lng, endCoordinates.lat]);
-            
-            trafficLights.forEach(signal => {
-              bounds.extend([signal.coordinates.lng, signal.coordinates.lat]);
+            // Extend bounds with traffic lights and their restaurants
+            restaurantsByLight.forEach(({ trafficLightLocation, restaurants }) => {
+              bounds.extend([trafficLightLocation.lng, trafficLightLocation.lat]);
+              restaurants.forEach(restaurant => {
+                bounds.extend([restaurant.location.lng, restaurant.location.lat]);
+              });
             });
             
             mapElement.fitBounds(bounds, {
@@ -229,10 +228,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
     };
     
     updateMap();
-  }, [startCoordinates, endCoordinates, routeGeometry, trafficLights, mapInitialized, isLoading, mapError]);
+  }, [startCoordinates, endCoordinates, routeGeometry, trafficLights, mapInitialized, isLoading, mapError, restaurantsByLight]);
 
   return (
-    <div className={`relative w-full h-full rounded-lg overflow-hidden ${isLoading ? 'opacity-50' : ''}`}>
+    <div className="relative w-full h-full rounded-lg overflow-hidden">
       {mapError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
           <div className="text-center p-4">
