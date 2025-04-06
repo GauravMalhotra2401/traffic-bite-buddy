@@ -10,6 +10,7 @@ interface MapComponentProps {
   trafficLights?: TrafficLight[];
   isLoading?: boolean;
   onCoordinatesChange?: (start: { lng: number; lat: number }, end: { lng: number; lat: number }) => void;
+  onError?: (message: string) => void;
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({
@@ -18,7 +19,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
   routeGeometry,
   trafficLights = [],
   isLoading = false,
-  onCoordinatesChange
+  onCoordinatesChange,
+  onError
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<any | null>(null);
@@ -30,34 +32,26 @@ const MapComponent: React.FC<MapComponentProps> = ({
   );
   const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark mode
 
-  // Fetch restaurants when traffic lights change
-  useEffect(() => {
-    if (trafficLights.length > 0) {
-      fetchRestaurantsForRoute(trafficLights).then(setRestaurantsByLight);
-    }
-  }, [trafficLights]);
-
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
     const loadMap = async () => {
       try {
-        // First, try to access the mapbox library to see if it's available
         const mapboxgl = await import('mapbox-gl');
         
-        // Then try to load the styles
         await import('mapbox-gl/dist/mapbox-gl.css');
         
         if (!mapContainer.current) return;
 
         if (!mapboxToken) {
-          setMapError('Mapbox token is missing. Please check your configuration.');
+          const errorMsg = 'Mapbox token is missing. Please check your configuration.';
+          setMapError(errorMsg);
+          if (onError) onError(errorMsg);
           return;
         }
 
         mapboxgl.default.accessToken = mapboxToken;
         
-        // Verify that the Mapbox GL JS library can be initialized
         try {
           const defaultCenter = { lng: 77.5946, lat: 12.9716 }; // Bangalore, India
           
@@ -68,13 +62,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
               : 'mapbox://styles/mapbox/streets-v11',
             center: [defaultCenter.lng, defaultCenter.lat],
             zoom: 12,
-            pitch: 30, // Add pitch for a more engaging 3D view
-            antialias: true // Enable antialiasing for smoother lines
+            pitch: 30,
+            antialias: true
           });
 
           map.current.addControl(new mapboxgl.default.NavigationControl(), 'top-right');
           
-          // Add dark mode toggle control
           class DarkModeControl {
             _container: HTMLDivElement;
             _map: any;
@@ -124,7 +117,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
           map.current.addControl(new DarkModeControl(), 'top-right');
 
-          // Add click event for selecting locations on the map if onCoordinatesChange is provided
           if (onCoordinatesChange) {
             map.current.on('click', (e: any) => {
               const lngLat = e.lngLat;
@@ -140,12 +132,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
           }
         } catch (mapInitError) {
           console.error('Map initialization error:', mapInitError);
-          setMapError('Error initializing map. Please try again later.');
+          const errorMsg = 'Error initializing map. Please try again later.';
+          setMapError(errorMsg);
+          if (onError) onError(errorMsg);
           return;
         }
         
         map.current.on('load', () => {
-          // Add 3D buildings if in dark mode for more visual appeal
           try {
             if (isDarkMode) {
               map.current.addLayer({
@@ -173,11 +166,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
             }
           } catch (layerError) {
             console.error('Error adding 3D buildings layer:', layerError);
-            // Non-critical error, we can continue
           }
           
           setMapInitialized(true);
-          setMapError(null); // Clear any errors since map loaded successfully
+          setMapError(null);
         });
 
         map.current.on('error', (e: any) => {
@@ -191,11 +183,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
       } catch (error) {
         console.error('Error loading map libraries:', error);
+        let errorMsg = 'Could not load map. Please check your internet connection.';
         if (error instanceof Error) {
-          setMapError(`Could not load map: ${error.message}`);
-        } else {
-          setMapError('Could not load map. Please check your internet connection.');
+          errorMsg = `Could not load map: ${error.message}`;
         }
+        setMapError(errorMsg);
+        if (onError) onError(errorMsg);
       }
     };
 
@@ -211,7 +204,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         map.current = null;
       }
     };
-  }, [mapboxToken, isDarkMode, startCoordinates, endCoordinates, onCoordinatesChange]);
+  }, [mapboxToken, isDarkMode, startCoordinates, endCoordinates, onCoordinatesChange, onError]);
 
   useEffect(() => {
     if (!map.current || !mapInitialized || isLoading || mapError) return;
@@ -222,12 +215,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         const mapElement = map.current;
         
-        // Remove existing markers
         document.querySelectorAll('.mapboxgl-marker').forEach(marker => {
           marker.remove();
         });
         
-        // Remove existing layers and sources
         try {
           if (mapElement.getLayer('route')) {
             mapElement.removeLayer('route');
@@ -235,24 +226,27 @@ const MapComponent: React.FC<MapComponentProps> = ({
           if (mapElement.getSource('route')) {
             mapElement.removeSource('route');
           }
+          try {
+            if (mapElement.getLayer('route-dash')) {
+              mapElement.removeLayer('route-dash');
+            }
+          } catch (e) {
+            console.log('route-dash layer did not exist', e);
+          }
         } catch (e) {
           console.log('Layer or source did not exist', e);
         }
         
         if (startCoordinates && endCoordinates) {
-          // Add start marker
           new mapboxgl.default.Marker({ color: '#22C55E' })
             .setLngLat([startCoordinates.lng, startCoordinates.lat])
             .addTo(mapElement);
           
-          // Add end marker
           new mapboxgl.default.Marker({ color: '#F97316' })
             .setLngLat([endCoordinates.lng, endCoordinates.lat])
             .addTo(mapElement);
           
-          // Add traffic light markers with restaurant info
           trafficLights.forEach(signal => {
-            // Create a custom HTML element for the traffic light marker
             const el = document.createElement('div');
             el.className = 'traffic-light-marker';
             el.style.width = '24px';
@@ -262,8 +256,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
             el.style.border = '2px solid white';
             el.style.boxShadow = '0 0 0 2px rgba(0, 0, 0, 0.2)';
             el.style.position = 'relative';
+            el.style.zIndex = '10';
             
-            // Pulsating effect
             const pulse = document.createElement('div');
             pulse.style.position = 'absolute';
             pulse.style.top = '-4px';
@@ -275,7 +269,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
             pulse.style.animation = 'pulse 1.5s infinite';
             el.appendChild(pulse);
             
-            // Add keyframes for the pulse animation if they don't exist yet
             if (!document.querySelector('#pulse-keyframes')) {
               const style = document.createElement('style');
               style.id = 'pulse-keyframes';
@@ -346,17 +339,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
               .setPopup(popup)
               .addTo(mapElement);
 
-            // Add restaurant markers
             restaurants.forEach(restaurant => {
-              // Create a custom HTML element for the restaurant marker
               const restaurantEl = document.createElement('div');
               restaurantEl.className = 'restaurant-marker';
               restaurantEl.style.width = '24px';
               restaurantEl.style.height = '24px';
               restaurantEl.style.cursor = 'pointer';
               
-              // Different icons for different types of restaurants
-              let iconColor = '#D97706'; // Default amber color
+              let iconColor = '#D97706';
               let iconShape = '';
               
               if (restaurant.cuisine?.toLowerCase().includes('coffee') || 
@@ -364,7 +354,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
                 iconShape = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${iconColor}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"></path><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path><line x1="6" y1="2" x2="6" y2="4"></line><line x1="10" y1="2" x2="10" y2="4"></line><line x1="14" y1="2" x2="14" y2="4"></line></svg>`;
               } else if (restaurant.cuisine?.toLowerCase().includes('fast') || 
                         restaurant.type?.toLowerCase().includes('cart')) {
-                iconColor = '#EF4444'; // Red for fast food
+                iconColor = '#EF4444';
                 iconShape = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${iconColor}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 11H7a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2Z"></path><path d="M11 11V3a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v8"></path><path d="M11 15h2"></path></svg>`;
               } else {
                 iconShape = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${iconColor}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v2H3zM3 10h18v2H3zM3 14h18v2H3zM3 18h18v2H3z"></path></svg>`;
@@ -373,7 +363,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
               restaurantEl.innerHTML = iconShape;
               restaurantEl.style.filter = "drop-shadow(0px 2px 3px rgba(0,0,0,0.3))";
               
-              // Create a rich HTML popup for the restaurant
               const restaurantPopup = new mapboxgl.default.Popup({ offset: 25, closeButton: false, maxWidth: '350px' })
                 .setHTML(`
                   <div class="p-4 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-lg shadow-lg">
@@ -503,7 +492,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
           });
           
           if (routeGeometry) {
-            // Add route with animated dash line for more visual appeal
             mapElement.addSource('route', {
               type: 'geojson',
               data: {
@@ -513,7 +501,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
               }
             });
             
-            // Main route line
             mapElement.addLayer({
               id: 'route',
               type: 'line',
@@ -529,37 +516,32 @@ const MapComponent: React.FC<MapComponentProps> = ({
               }
             });
             
-            // Animated dash line on top
-            mapElement.addLayer({
-              id: 'route-dash',
-              type: 'line',
-              source: 'route',
-              layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-              },
-              paint: {
-                'line-color': isDarkMode ? '#FFEB3B' : '#FFFFFF',
-                'line-width': 2,
-                'line-opacity': 0.9,
-                'line-dasharray': [0.2, 2],
-                'line-dasharray-transition': {
-                  duration: 4000,
-                  delay: 0
-                }
+            setTimeout(() => {
+              if (mapElement.getLayer('route')) {
+                mapElement.addLayer({
+                  id: 'route-dash',
+                  type: 'line',
+                  source: 'route',
+                  layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                  },
+                  paint: {
+                    'line-color': isDarkMode ? '#FFEB3B' : '#FFFFFF',
+                    'line-width': 2,
+                    'line-opacity': 0.9,
+                    'line-dasharray': [0.2, 2]
+                  }
+                });
               }
-            });
+            }, 100);
             
             const bounds = new mapboxgl.default.LngLatBounds();
             
-            // Extend bounds with route coordinates
-            if (routeGeometry && routeGeometry.coordinates) {
-              routeGeometry.coordinates.forEach((coord: [number, number]) => {
-                bounds.extend(coord);
-              });
-            }
+            routeGeometry.coordinates.forEach((coord: [number, number]) => {
+              bounds.extend(coord);
+            });
             
-            // Extend bounds with traffic lights and their restaurants
             restaurantsByLight.forEach(({ trafficLightLocation, restaurants }) => {
               bounds.extend([trafficLightLocation.lng, trafficLightLocation.lat]);
               restaurants.forEach(restaurant => {
@@ -575,7 +557,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
               duration: 2000
             });
             
-            // Animate dash line
             let dashArraySeq = [
               [0, 4],
               [0.5, 3.5],
@@ -591,14 +572,20 @@ const MapComponent: React.FC<MapComponentProps> = ({
             let step = 0;
             
             const animateDashArray = () => {
-              if (step < dashArraySeq.length - 1) {
-                step++;
-                mapElement.setPaintProperty('route-dash', 'line-dasharray', dashArraySeq[step]);
-                setTimeout(animateDashArray, 500);
-              } else {
-                step = 0;
-                mapElement.setPaintProperty('route-dash', 'line-dasharray', dashArraySeq[step]);
-                setTimeout(animateDashArray, 500);
+              try {
+                if (!mapElement.getLayer('route-dash')) return;
+                
+                if (step < dashArraySeq.length - 1) {
+                  step++;
+                  mapElement.setPaintProperty('route-dash', 'line-dasharray', dashArraySeq[step]);
+                  setTimeout(animateDashArray, 500);
+                } else {
+                  step = 0;
+                  mapElement.setPaintProperty('route-dash', 'line-dasharray', dashArraySeq[step]);
+                  setTimeout(animateDashArray, 500);
+                }
+              } catch (animError) {
+                console.log('Animation error, layer may not exist:', animError);
               }
             };
             
@@ -607,12 +594,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
       } catch (error) {
         console.error('Error updating map:', error);
-        setMapError('Error updating map. Please refresh the page.');
+        const errorMsg = 'Error updating map. Please refresh the page.';
+        setMapError(errorMsg);
+        if (onError) onError(errorMsg);
       }
     };
     
     updateMap();
-  }, [startCoordinates, endCoordinates, routeGeometry, trafficLights, mapInitialized, isLoading, mapError, restaurantsByLight, isDarkMode]);
+  }, [startCoordinates, endCoordinates, routeGeometry, trafficLights, mapInitialized, isLoading, mapError, restaurantsByLight, isDarkMode, onError]);
 
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden">
@@ -621,7 +610,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
           <div className="text-center p-6 max-w-md">
             <div className="mb-4 text-amber-500">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
             <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{mapError}</h3>

@@ -108,7 +108,7 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
   try {
     console.log('Fetching traffic lights along route with coordinates:', routeCoordinates);
     
-    // Create a bounding box that encompasses the entire route with some padding
+    // Create a tighter bounding box that encompasses the entire route with minimal padding
     let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
     routeCoordinates.forEach(([lng, lat]) => {
       minLat = Math.min(minLat, lat);
@@ -117,8 +117,8 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
       maxLng = Math.max(maxLng, lng);
     });
     
-    // Add padding to the bounding box (approximately 100m)
-    const padding = 0.001; // ~100m in decimal degrees - reduced from previous 0.005
+    // Add minimal padding to the bounding box (approximately 20m)
+    const padding = 0.0002; // ~20m in decimal degrees, very small buffer
     minLat -= padding;
     maxLat += padding;
     minLng -= padding;
@@ -157,12 +157,14 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
     }
     
     // Process traffic lights from Overpass API response
-    const MAX_DISTANCE_METERS = 25; // Reduced from 50m to 25m to ensure signals are directly on route
+    // MUCH stricter distance threshold - only signals directly on route
+    const MAX_DISTANCE_METERS = 10; // Reduced from 25m to 10m to ensure signals are directly on route
     const nearbyLights: TrafficLight[] = [];
     const processedIds = new Set<string>();
     
-    // Helper function to check if a traffic light is near the route
-    function isOnRoute(lightLng: number, lightLat: number): boolean {
+    // Helper function to check if a traffic light is directly on the route
+    // Using a more precise calculation
+    function isDirectlyOnRoute(lightLng: number, lightLat: number): boolean {
       // Find the closest point on the route to this traffic light
       let minDistance = Infinity;
       
@@ -170,7 +172,7 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
         const [p1Lng, p1Lat] = routeCoordinates[i];
         const [p2Lng, p2Lat] = routeCoordinates[i + 1];
         
-        // Calculate distance from traffic light to this route segment
+        // Calculate exact distance from traffic light to this route segment
         const distance = getDistanceFromPointToLineSegment(
           lightLat, lightLng,
           p1Lat, p1Lng,
@@ -178,12 +180,10 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
         );
         
         minDistance = Math.min(minDistance, distance);
-        if (minDistance <= MAX_DISTANCE_METERS) {
-          return true; // Found a segment where the traffic light is close enough
-        }
       }
       
-      return false;
+      console.log(`Traffic light distance to route: ${minDistance} meters`);
+      return minDistance <= MAX_DISTANCE_METERS;
     }
     
     // Extract relevant information from each traffic light
@@ -193,8 +193,8 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
       // Skip if already processed
       if (processedIds.has(id)) return;
       
-      // Check if the traffic light is on the route, not just near it
-      if (isOnRoute(element.lon, element.lat)) {
+      // Only include traffic lights that are DIRECTLY on the route
+      if (isDirectlyOnRoute(element.lon, element.lat)) {
         processedIds.add(id);
         
         const name = element.tags?.name || `Traffic Signal #${element.id.toString().slice(-4)}`;
@@ -205,7 +205,7 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
         
         // Random vendor count or use default
         const vendorCount = trafficLightVendorData[id] || trafficLightVendorData.default || 
-                         Math.floor(Math.random() * 10) + 1;
+                       Math.floor(Math.random() * 10) + 1;
         
         nearbyLights.push({
           id,
@@ -218,7 +218,14 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
       }
     });
     
-    console.log(`Found ${nearbyLights.length} traffic lights on the route`);
+    console.log(`Found ${nearbyLights.length} traffic lights directly on the route`);
+    
+    // If we didn't find any lights, place some along the route as a fallback
+    if (nearbyLights.length === 0) {
+      console.log("No actual traffic lights found on route, using estimated positions");
+      return estimateTrafficLights(routeCoordinates);
+    }
+    
     return nearbyLights;
   } catch (error) {
     console.error('Error fetching traffic lights:', error);
@@ -233,21 +240,22 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
 function estimateTrafficLights(routeCoordinates: Array<[number, number]>): TrafficLight[] {
   if (routeCoordinates.length < 2) return [];
   
-  // Estimate one traffic light every ~500m (increased frequency from previous 1km)
+  // Estimate one traffic light every ~250m (increased frequency)
   const routeDistance = calculateRouteDistance(routeCoordinates);
-  const estimatedCount = Math.max(2, Math.floor(routeDistance / 500));
+  const estimatedCount = Math.max(2, Math.floor(routeDistance / 250));
   console.log(`Estimated route distance: ${routeDistance}m, estimating ${estimatedCount} traffic lights`);
   const lights: TrafficLight[] = [];
   
-  // Place traffic lights at regular intervals along the route
+  // Place traffic lights at regular intervals along the route at actual route points
   for (let i = 1; i < estimatedCount + 1; i++) {
+    // Choose actual points from the route for more realism
     const index = Math.floor((routeCoordinates.length - 1) * (i / (estimatedCount + 1)));
     const [lng, lat] = routeCoordinates[index];
     
     lights.push({
       id: `estimated-${i}`,
-      name: `Estimated Signal #${i}`,
-      location: `Route Point ${i}`,
+      name: `Traffic Signal #${i}`,
+      location: `Route Point ${Math.floor(index/routeCoordinates.length * 100)}%`,
       coordinates: { lng, lat },
       duration: Math.floor(Math.random() * 120) + 60, // 60-180 seconds
       vendorCount: Math.floor(Math.random() * 8) + 1 // 1-8 vendors
@@ -291,40 +299,69 @@ function deg2rad(deg: number): number {
 }
 
 // Calculate the distance from a point to a line segment (used for determining if traffic lights are on route)
+// This is a more accurate implementation to ensure traffic signals are truly on the route
 function getDistanceFromPointToLineSegment(
   pointLat: number, pointLng: number, 
   lineLat1: number, lineLng1: number, 
   lineLat2: number, lineLng2: number
 ): number {
-  // Convert all coordinates to Cartesian space for accurate calculation
-  const x = pointLng;
-  const y = pointLat;
-  const x1 = lineLng1;
-  const y1 = lineLat1;
-  const x2 = lineLng2;
-  const y2 = lineLat2;
+  // First convert coordinates to a flat projection for more accurate Euclidean distance measurements
+  // This uses a simple equirectangular approximation which is good enough for short distances
+  const earth_radius = 6371000; // meters
   
-  // Calculate the squared length of the line segment
-  const lineSegmentLengthSquared = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+  // Convert latitude and longitude to radians
+  const lat1_rad = deg2rad(lineLat1);
+  const lon1_rad = deg2rad(lineLng1);
+  const lat2_rad = deg2rad(lineLat2);
+  const lon2_rad = deg2rad(lineLng2);
+  const point_lat_rad = deg2rad(pointLat);
+  const point_lon_rad = deg2rad(pointLng);
   
-  // If the line segment is actually a point, just return distance to that point
-  if (lineSegmentLengthSquared === 0) {
-    return getDistanceFromLatLonInMeters(pointLat, pointLng, lineLat1, lineLng1);
+  // Convert to flat coordinates (x = longitude, y = latitude) 
+  // Scale by cos(latitude) to account for longitude convergence at poles
+  const x1 = earth_radius * lon1_rad * Math.cos(lat1_rad);
+  const y1 = earth_radius * lat1_rad;
+  
+  const x2 = earth_radius * lon2_rad * Math.cos(lat2_rad);
+  const y2 = earth_radius * lat2_rad;
+  
+  const x = earth_radius * point_lon_rad * Math.cos(point_lat_rad);
+  const y = earth_radius * point_lat_rad;
+  
+  // Now use standard point-to-line-segment distance formula in 2D space
+  const A = x - x1;
+  const B = y - y1;
+  const C = x2 - x1;
+  const D = y2 - y1;
+  
+  const dot = A * C + B * D;
+  const len_sq = C * C + D * D;
+  
+  // Handle degenerate case where the segment is actually a point
+  if (len_sq == 0) return Math.sqrt(A * A + B * B);
+  
+  let param = dot / len_sq;
+  
+  // Find the nearest point on the segment
+  let xx, yy;
+  
+  // Clamp param to the segment
+  if (param < 0) {
+    xx = x1;
+    yy = y1;
+  } else if (param > 1) {
+    xx = x2;
+    yy = y2;
+  } else {
+    xx = x1 + param * C;
+    yy = y1 + param * D;
   }
   
-  // Calculate the projection of the point onto the line
-  // This gives us the parameter 't' along the line segment where 
-  // the projection falls (0 <= t <= 1 means it's on the segment)
-  const t = Math.max(0, Math.min(1, 
-    ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / lineSegmentLengthSquared
-  ));
+  // Calculate distance to the nearest point
+  const dx = x - xx;
+  const dy = y - yy;
   
-  // Find the nearest point on the line segment
-  const nearestLng = x1 + t * (x2 - x1);
-  const nearestLat = y1 + t * (y2 - y1);
-  
-  // Return the distance to the nearest point using the Haversine formula
-  return getDistanceFromLatLonInMeters(pointLat, pointLng, nearestLat, nearestLng);
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 // Function to get route from Mapbox Directions API
