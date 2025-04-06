@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { TrafficLight } from '../services/routeService';
 import { Restaurant, RestaurantsByTrafficLight, fetchRestaurantsForRoute } from '../services/restaurantService';
@@ -43,126 +42,160 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
     const loadMap = async () => {
       try {
+        // First, try to access the mapbox library to see if it's available
         const mapboxgl = await import('mapbox-gl');
+        
+        // Then try to load the styles
         await import('mapbox-gl/dist/mapbox-gl.css');
         
         if (!mapContainer.current) return;
 
-        mapboxgl.default.accessToken = mapboxToken;
-        
-        const defaultCenter = { lng: 77.5946, lat: 12.9716 }; // Bangalore, India
-        
-        map.current = new mapboxgl.default.Map({
-          container: mapContainer.current,
-          style: isDarkMode 
-            ? 'mapbox://styles/mapbox/navigation-night-v1' 
-            : 'mapbox://styles/mapbox/streets-v11',
-          center: [defaultCenter.lng, defaultCenter.lat],
-          zoom: 12,
-          pitch: 30, // Add pitch for a more engaging 3D view
-          antialias: true // Enable antialiasing for smoother lines
-        });
-
-        map.current.addControl(new mapboxgl.default.NavigationControl(), 'top-right');
-        
-        // Add dark mode toggle control
-        class DarkModeControl {
-          _container: HTMLDivElement;
-          _map: any;
-
-          onAdd(map: any) {
-            this._map = map;
-            this._container = document.createElement('div');
-            this._container.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
-            
-            const button = document.createElement('button');
-            button.className = 'mapboxgl-ctrl-icon';
-            button.innerHTML = isDarkMode 
-              ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>' 
-              : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
-            button.title = isDarkMode ? 'Switch to light mode' : 'Switch to dark mode';
-            button.setAttribute('aria-label', isDarkMode ? 'Switch to light mode' : 'Switch to dark mode');
-            button.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;';
-
-            button.onclick = () => {
-              const newMode = !isDarkMode;
-              setIsDarkMode(newMode);
-              
-              map.setStyle(newMode 
-                ? 'mapbox://styles/mapbox/navigation-night-v1' 
-                : 'mapbox://styles/mapbox/streets-v11'
-              );
-              
-              button.innerHTML = newMode 
-                ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>'
-                : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
-              button.title = newMode ? 'Switch to light mode' : 'Switch to dark mode';
-              button.setAttribute('aria-label', newMode ? 'Switch to light mode' : 'Switch to dark mode');
-            };
-            
-            this._container.appendChild(button);
-            return this._container;
-          }
-
-          onRemove() {
-            this._container.parentNode?.removeChild(this._container);
-          }
+        if (!mapboxToken) {
+          setMapError('Mapbox token is missing. Please check your configuration.');
+          return;
         }
 
-        map.current.addControl(new DarkModeControl(), 'top-right');
-
-        // Add click event for selecting locations on the map if onCoordinatesChange is provided
-        if (onCoordinatesChange) {
-          map.current.on('click', (e: any) => {
-            const lngLat = e.lngLat;
-            
-            if (startCoordinates && !endCoordinates) {
-              const newEndCoordinates = { lng: lngLat.lng, lat: lngLat.lat };
-              onCoordinatesChange(startCoordinates, newEndCoordinates);
-            } else if (!startCoordinates) {
-              const newStartCoordinates = { lng: lngLat.lng, lat: lngLat.lat };
-              onCoordinatesChange(newStartCoordinates, { lng: 0, lat: 0 });
-            }
+        mapboxgl.default.accessToken = mapboxToken;
+        
+        // Verify that the Mapbox GL JS library can be initialized
+        try {
+          const defaultCenter = { lng: 77.5946, lat: 12.9716 }; // Bangalore, India
+          
+          map.current = new mapboxgl.default.Map({
+            container: mapContainer.current,
+            style: isDarkMode 
+              ? 'mapbox://styles/mapbox/navigation-night-v1' 
+              : 'mapbox://styles/mapbox/streets-v11',
+            center: [defaultCenter.lng, defaultCenter.lat],
+            zoom: 12,
+            pitch: 30, // Add pitch for a more engaging 3D view
+            antialias: true // Enable antialiasing for smoother lines
           });
+
+          map.current.addControl(new mapboxgl.default.NavigationControl(), 'top-right');
+          
+          // Add dark mode toggle control
+          class DarkModeControl {
+            _container: HTMLDivElement;
+            _map: any;
+
+            onAdd(map: any) {
+              this._map = map;
+              this._container = document.createElement('div');
+              this._container.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
+              
+              const button = document.createElement('button');
+              button.className = 'mapboxgl-ctrl-icon';
+              button.innerHTML = isDarkMode 
+                ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>' 
+                : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+              button.title = isDarkMode ? 'Switch to light mode' : 'Switch to dark mode';
+              button.setAttribute('aria-label', isDarkMode ? 'Switch to light mode' : 'Switch to dark mode');
+              button.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;';
+
+              button.onclick = () => {
+                const newMode = !isDarkMode;
+                setIsDarkMode(newMode);
+                
+                try {
+                  map.setStyle(newMode 
+                    ? 'mapbox://styles/mapbox/navigation-night-v1' 
+                    : 'mapbox://styles/mapbox/streets-v11'
+                  );
+                  
+                  button.innerHTML = newMode 
+                    ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>'
+                    : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+                  button.title = newMode ? 'Switch to light mode' : 'Switch to dark mode';
+                  button.setAttribute('aria-label', newMode ? 'Switch to light mode' : 'Switch to dark mode');
+                } catch (styleError) {
+                  console.error('Error changing map style:', styleError);
+                }
+              };
+              
+              this._container.appendChild(button);
+              return this._container;
+            }
+
+            onRemove() {
+              this._container.parentNode?.removeChild(this._container);
+            }
+          }
+
+          map.current.addControl(new DarkModeControl(), 'top-right');
+
+          // Add click event for selecting locations on the map if onCoordinatesChange is provided
+          if (onCoordinatesChange) {
+            map.current.on('click', (e: any) => {
+              const lngLat = e.lngLat;
+              
+              if (startCoordinates && !endCoordinates) {
+                const newEndCoordinates = { lng: lngLat.lng, lat: lngLat.lat };
+                onCoordinatesChange(startCoordinates, newEndCoordinates);
+              } else if (!startCoordinates) {
+                const newStartCoordinates = { lng: lngLat.lng, lat: lngLat.lat };
+                onCoordinatesChange(newStartCoordinates, { lng: 0, lat: 0 });
+              }
+            });
+          }
+        } catch (mapInitError) {
+          console.error('Map initialization error:', mapInitError);
+          setMapError('Error initializing map. Please try again later.');
+          return;
         }
         
         map.current.on('load', () => {
           // Add 3D buildings if in dark mode for more visual appeal
-          if (isDarkMode) {
-            map.current.addLayer({
-              'id': '3d-buildings',
-              'source': 'composite',
-              'source-layer': 'building',
-              'filter': ['==', 'extrude', 'true'],
-              'type': 'fill-extrusion',
-              'minzoom': 14,
-              'paint': {
-                'fill-extrusion-color': '#222',
-                'fill-extrusion-height': [
-                  'interpolate', ['linear'], ['zoom'],
-                  15, 0,
-                  16, ['get', 'height']
-                ],
-                'fill-extrusion-base': [
-                  'interpolate', ['linear'], ['zoom'],
-                  15, 0,
-                  16, ['get', 'min_height']
-                ],
-                'fill-extrusion-opacity': 0.6
-              }
-            });
+          try {
+            if (isDarkMode) {
+              map.current.addLayer({
+                'id': '3d-buildings',
+                'source': 'composite',
+                'source-layer': 'building',
+                'filter': ['==', 'extrude', 'true'],
+                'type': 'fill-extrusion',
+                'minzoom': 14,
+                'paint': {
+                  'fill-extrusion-color': '#222',
+                  'fill-extrusion-height': [
+                    'interpolate', ['linear'], ['zoom'],
+                    15, 0,
+                    16, ['get', 'height']
+                  ],
+                  'fill-extrusion-base': [
+                    'interpolate', ['linear'], ['zoom'],
+                    15, 0,
+                    16, ['get', 'min_height']
+                  ],
+                  'fill-extrusion-opacity': 0.6
+                }
+              });
+            }
+          } catch (layerError) {
+            console.error('Error adding 3D buildings layer:', layerError);
+            // Non-critical error, we can continue
           }
           
           setMapInitialized(true);
+          setMapError(null); // Clear any errors since map loaded successfully
         });
 
         map.current.on('error', (e: any) => {
           console.error('Mapbox error:', e);
-          setMapError('Error loading map');
+          if (e.error && e.error.message) {
+            setMapError(`Error loading map: ${e.error.message}`);
+          } else {
+            setMapError('Error loading map. Please try again.');
+          }
         });
+
       } catch (error) {
-        console.error('Error initializing map:', error);
-        setMapError('Could not load map. Please check your internet connection.');
+        console.error('Error loading map libraries:', error);
+        if (error instanceof Error) {
+          setMapError(`Could not load map: ${error.message}`);
+        } else {
+          setMapError('Could not load map. Please check your internet connection.');
+        }
       }
     };
 
@@ -178,7 +211,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         map.current = null;
       }
     };
-  }, [mapboxToken, isDarkMode]);
+  }, [mapboxToken, isDarkMode, startCoordinates, endCoordinates, onCoordinatesChange]);
 
   useEffect(() => {
     if (!map.current || !mapInitialized || isLoading || mapError) return;
@@ -271,7 +304,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
                   <div class="flex items-center gap-3 mt-2">
                     <span class="inline-flex items-center">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 ${isDarkMode ? 'text-red-400' : 'text-red-500'}" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                        <path d="M17 8h1a4 4 0 1 1 0 8h-1"></path><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path><line x1="6" y1="2" x2="6" y2="4"></line><line x1="10" y1="2" x2="10" y2="4"></line><line x1="14" y1="2" x2="14" y2="4"></line></svg>
                       </svg>
                       ${signal.duration}s wait
                     </span>
@@ -378,8 +411,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
                       ${restaurant.address ? `
                         <div class="flex items-start ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}">
                           <svg class="w-4 h-4 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1113.314 0z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h1a4 4 0 1 1 0 8h-1"></path><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path><line x1="6" y1="2" x2="6" y2="4"></line><line x1="10" y1="2" x2="10" y2="4"></line><line x1="14" y1="2" x2="14" y2="4"></line></svg>
                           </svg>
                           <span class="text-sm">${restaurant.address}</span>
                         </div>
@@ -586,16 +618,33 @@ const MapComponent: React.FC<MapComponentProps> = ({
     <div className="relative w-full h-full rounded-lg overflow-hidden">
       {mapError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-          <div className="text-center p-4">
+          <div className="text-center p-6 max-w-md">
             <div className="mb-4 text-amber-500">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
-            <h3 className="font-bold text-lg">{mapError}</h3>
-            <p className="text-gray-600 dark:text-gray-300 mt-2">
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{mapError}</h3>
+            <p className="text-gray-600 dark:text-gray-300 mt-2 mb-4">
               Please check your internet connection or try again later.
             </p>
+            <button 
+              className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
+              onClick={() => {
+                setMapError(null);
+                if (map.current) {
+                  try {
+                    map.current.remove();
+                  } catch (e) {
+                    console.error('Error removing map:', e);
+                  }
+                  map.current = null;
+                }
+                window.location.reload();
+              }}
+            >
+              Retry
+            </button>
           </div>
         </div>
       ) : (

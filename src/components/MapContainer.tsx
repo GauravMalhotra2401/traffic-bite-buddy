@@ -2,6 +2,7 @@
 import React from 'react';
 import MapComponent from './MapComponent';
 import { TrafficLight } from '../services/routeService';
+import { toast } from "sonner";
 
 interface Coordinates {
   lng: number;
@@ -25,6 +26,10 @@ const MapContainer: React.FC<MapContainerProps> = ({
   isLoading = false,
   onCoordinatesChange
 }) => {
+  const handleMapError = (error: string) => {
+    toast.error(error);
+  };
+
   return (
     <div className="relative w-full h-full">
       <MapComponent
