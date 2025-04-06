@@ -35,6 +35,11 @@ const MapContainer: React.FC<MapContainerProps> = ({
         isLoading={isLoading}
         onCoordinatesChange={onCoordinatesChange}
       />
+      {trafficLights && trafficLights.length > 0 && (
+        <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+          {trafficLights.length} traffic signal{trafficLights.length !== 1 ? 's' : ''} on route
+        </div>
+      )}
     </div>
   );
 };
