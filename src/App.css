@@ -1,3 +1,4 @@
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -111,4 +112,69 @@
   100% {
     background-position: 0% 50%;
   }
+}
+
+/* Map styles */
+.mapboxgl-popup-content {
+  padding: 0 !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
+  overflow: hidden !important;
+  border: none !important;
+}
+
+.mapboxgl-popup-tip {
+  display: none !important;
+}
+
+.mapboxgl-ctrl-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.mapboxgl-ctrl-top-right .mapboxgl-ctrl {
+  margin: 10px 10px 0 0 !important;
+}
+
+/* Map dark mode */
+.map-dark .mapboxgl-popup-content {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
+}
+
+.map-dark .mapboxgl-popup-close-button {
+  color: #f3f4f6 !important;
+}
+
+/* Pulse animation for traffic lights */
+@keyframes pulse-slow {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s infinite;
+}
+
+/* Restaurant and traffic light markers */
+.restaurant-marker,
+.traffic-light-marker {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.restaurant-marker:hover,
+.traffic-light-marker:hover {
+  transform: scale(1.2);
 }

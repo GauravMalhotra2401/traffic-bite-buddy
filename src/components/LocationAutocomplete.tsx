@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, ChevronsUpDown, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   const [loading, setLoading] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
     setInputValue(value);
@@ -46,7 +48,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     onChange(newValue); // Update parent with text only
 
     // Open popover when typing
-    if (newValue.length > 2) {
+    if (newValue.length > 2 && isFocused) {
       setOpen(true);
     }
 
@@ -61,7 +63,6 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         try {
           const results = await getSuggestions(newValue);
           setSuggestions(results);
-          console.log('Suggestions received:', results); // Debug log
         } catch (error) {
           console.error('Error fetching suggestions:', error);
           setSuggestions([]);
@@ -79,16 +80,10 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     setInputValue(suggestion.place_name);
     onChange(suggestion.place_name, { lng, lat });
     setOpen(false);
-    
-    // Keep focus on the input after selection
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
   };
   
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Prevent the default Command component behavior for tab and arrow keys
-    // This allows the user to continue typing
     if (e.key === 'Tab' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.stopPropagation(); // Don't let the Command component capture these
     }
@@ -97,6 +92,23 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     if (e.key === 'Escape') {
       setOpen(false);
     }
+  };
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    if (inputValue.length > 2) {
+      setOpen(true);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    // Use timeout to allow click events on the suggestions to fire first
+    setTimeout(() => {
+      if (!open) {
+        setOpen(false);
+      }
+    }, 200);
   };
 
   return (
@@ -116,7 +128,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
               className={icon ? "pl-10" : ""}
-              onFocus={() => inputValue.length > 2 && setOpen(true)}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
               disabled={disabled}
               autoComplete="off" // Prevent browser autocomplete from interfering
             />

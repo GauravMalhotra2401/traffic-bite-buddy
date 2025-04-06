@@ -42,7 +42,7 @@ export async function getSuggestions(query: string): Promise<Array<{
   try {
     console.log('Fetching suggestions for:', query);
     const response = await fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_API_KEY}&autocomplete=true&limit=5`
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_API_KEY}&autocomplete=true&limit=5&types=address,place,locality,neighborhood,poi`
     );
     
     if (!response.ok) {
