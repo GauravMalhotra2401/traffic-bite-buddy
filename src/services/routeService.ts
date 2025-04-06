@@ -117,8 +117,8 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
       maxLng = Math.max(maxLng, lng);
     });
     
-    // Add padding to the bounding box (approximately 500m)
-    const padding = 0.005; // ~500m in decimal degrees
+    // Add padding to the bounding box (approximately 100m)
+    const padding = 0.001; // ~100m in decimal degrees - reduced from previous 0.005
     minLat -= padding;
     maxLat += padding;
     minLng -= padding;
@@ -157,7 +157,7 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
     }
     
     // Process traffic lights from Overpass API response
-    const MAX_DISTANCE_METERS = 50; // Only include signals within 50 meters of route
+    const MAX_DISTANCE_METERS = 25; // Reduced from 50m to 25m to ensure signals are directly on route
     const nearbyLights: TrafficLight[] = [];
     const processedIds = new Set<string>();
     
@@ -233,8 +233,10 @@ async function fetchTrafficLightsAlongRoute(routeCoordinates: Array<[number, num
 function estimateTrafficLights(routeCoordinates: Array<[number, number]>): TrafficLight[] {
   if (routeCoordinates.length < 2) return [];
   
-  // Estimate one traffic light every ~1km
-  const estimatedCount = Math.max(1, Math.floor(calculateRouteDistance(routeCoordinates) / 1000));
+  // Estimate one traffic light every ~500m (increased frequency from previous 1km)
+  const routeDistance = calculateRouteDistance(routeCoordinates);
+  const estimatedCount = Math.max(2, Math.floor(routeDistance / 500));
+  console.log(`Estimated route distance: ${routeDistance}m, estimating ${estimatedCount} traffic lights`);
   const lights: TrafficLight[] = [];
   
   // Place traffic lights at regular intervals along the route
